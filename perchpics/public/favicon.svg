@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Background circle -->
+  <circle cx="50" cy="50" r="45" fill="#606C38" />
+  
+  <!-- Bird perch -->
+  <line x1="20" y1="60" x2="80" y2="60" stroke="#DDA15E" stroke-width="4" stroke-linecap="round" />
+  
+  <!-- Bird silhouette -->
+  <path d="M40 40 Q50 30 60 40 L65 35 L70 40 L60 45 Q55 60 45 60 Q35 60 40 40" fill="#FEFAE0" />
+  
+  <!-- Bird eye -->
+  <circle cx="55" cy="38" r="2" fill="#283618" />
+  
+  <!-- Camera lens -->
+  <circle cx="50" cy="75" r="10" fill="#FEFAE0" stroke="#283618" stroke-width="2" />
+  <circle cx="50" cy="75" r="5" fill="#283618" />
+</svg> 
