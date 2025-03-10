@@ -130,6 +130,45 @@ If the application shows a blank page or fails to render:
 
 The working version is based on commit c5573bad822e02be096d225da84367e1cbe8ac98, which should be used as the reference implementation for any future development.
 
+### 2025-03-15: User Experience Improvements
+
+#### Photo Upload Enhancements
+
+1. **Optional Caption and Alt Text**:
+   - Modified the frontend (Upload.tsx) to make caption and alt text fields optional
+   - Updated the backend (photos.js) to handle uploads without caption or alt text
+   - Improved user experience by removing mandatory fields that might discourage photo sharing
+   - Added appropriate UI indicators to show which fields are optional
+
+2. **Implementation Details**:
+   - Frontend changes:
+     - Removed validation checks that required caption and alt text
+     - Updated form labels to indicate optional fields
+     - Removed the `required` attribute from input fields
+   - Backend changes:
+     - Removed validation check that required a caption
+     - Added default empty string for caption if not provided
+     - Maintained compatibility with existing database schema
+
+3. **Testing Considerations**:
+   - Verified uploads work correctly with:
+     - Both caption and alt text provided
+     - Only caption provided
+     - Only alt text provided
+     - Neither caption nor alt text provided
+   - Confirmed that the application handles all cases gracefully
+
+#### Benefits
+
+1. **Improved User Experience**:
+   - Reduced friction in the upload process
+   - Allows for quicker sharing of photos
+   - Maintains accessibility options while making them optional
+
+2. **Increased Flexibility**:
+   - Users can choose what metadata to include with their photos
+   - Supports different use cases (quick sharing vs. detailed posts)
+
 ## Implementation Notes
 
 ### Key Design Decisions
