@@ -51,9 +51,7 @@ export function setupPhotoRoutes(app, db) {
         return res.status(400).json({ error: 'Image file is required' });
       }
       
-      if (!caption) {
-        return res.status(400).json({ error: 'Caption is required' });
-      }
+      // Caption is now optional
       
       // Create blob record
       const blobId = path.basename(req.file.path);
@@ -64,7 +62,7 @@ export function setupPhotoRoutes(app, db) {
       
       // Create photo record
       const photoData = {
-        caption,
+        caption: caption || '', // Provide default empty string if caption is not provided
         altText: altText || null,
         location: location || null,
         tags: tags ? JSON.parse(tags) : [],
