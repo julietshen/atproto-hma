@@ -55,13 +55,8 @@ export const initPDSServer = async () => {
   setupAuthRoutes(app, db);
   setupPhotoRoutes(app, db);
   
-  // Original health check endpoint
-  app.get('/health', (req, res) => {
-    res.json({ status: 'ok', version: '1.0.0' });
-  });
-  
-  // AT Protocol standard health endpoint
-  app.get('/xrpc/_health', (req, res) => {
+  // Health check endpoint
+  app.get('/xrpc/health', (req, res) => {
     res.json({ status: 'ok', version: '1.0.0' });
   });
   
