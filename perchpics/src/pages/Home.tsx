@@ -1,24 +1,47 @@
 import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import atProtoService from '../services/atproto';
-import Post from '../components/Post';
+
+// Import PDS_URL from the atproto service
+const PDS_URL = 'http://localhost:3001';
 
 const Home = () => {
   const [posts, setPosts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
+    // Check if user is logged in
+    const checkLoginStatus = () => {
+      const loggedIn = atProtoService.isLoggedIn();
+      setIsLoggedIn(loggedIn);
+      return loggedIn;
+    };
+
     const fetchTimeline = async () => {
       try {
         setIsLoading(true);
-        const timeline = await atProtoService.getTimeline();
         
-        // Filter to only show posts with images
-        const postsWithImages = timeline.filter(post => 
-          post.post?.embed?.$type === 'app.bsky.embed.images'
-        );
+        // First check if user is logged in
+        const loggedIn = checkLoginStatus();
+        if (!loggedIn) {
+          console.log('User not logged in, redirecting to login');
+          navigate('/login');
+          return;
+        }
         
-        setPosts(postsWithImages);
+        console.log('Fetching timeline...');
+        const response = await atProtoService.getTimeline();
+        console.log('Timeline response:', response);
+        
+        if (response && response.photos) {
+          setPosts(response.photos);
+        } else {
+          setPosts([]);
+        }
       } catch (err) {
         console.error('Error fetching timeline:', err);
         setError('Failed to load timeline. Please try again later.');
@@ -28,7 +51,16 @@ const Home = () => {
     };
 
     fetchTimeline();
-  }, []);
+  }, [location.key, navigate]); // Re-fetch when location changes or navigate changes
+
+  // Helper function to format the author name from DID
+  const formatAuthorName = (did: string) => {
+    if (did.startsWith('did:perchpics:')) {
+      // Extract username from DID
+      return did.replace('did:perchpics:', '');
+    }
+    return did;
+  };
 
   if (isLoading) {
     return <div className="loading">Loading timeline...</div>;
@@ -40,7 +72,9 @@ const Home = () => {
 
   return (
     <div className="home-container">
-      <h1>Photo Feed</h1>
+      <div className="home-header">
+        <h1>Photo Feed</h1>
+      </div>
       
       {posts.length === 0 ? (
         <div className="empty-state">
@@ -49,8 +83,31 @@ const Home = () => {
         </div>
       ) : (
         <div className="posts-container">
-          {posts.map((post) => (
-            <Post key={post.post.uri} post={post} />
+          {posts.map((photo) => (
+            <div key={photo.id} className="post">
+              <div className="post-header">
+                <span className="post-author">@{formatAuthorName(photo.author_did)}</span>
+              </div>
+              <div className="post-image-container">
+                <img 
+                  src={`${PDS_URL}/blobs/${photo.blob_id}`} 
+                  alt={photo.alt_text || photo.caption} 
+                  className="post-image"
+                />
+              </div>
+              <div className="post-content">
+                <p className="post-caption">{photo.caption}</p>
+                {photo.location && <p className="post-location">{photo.location}</p>}
+                {photo.tags && photo.tags.length > 0 && (
+                  <div className="post-tags">
+                    {photo.tags.map((tag: string) => (
+                      <span key={tag} className="post-tag">#{tag}</span>
+                    ))}
+                  </div>
+                )}
+                <p className="post-date">{new Date(photo.created_at).toLocaleString()}</p>
+              </div>
+            </div>
           ))}
         </div>
       )}

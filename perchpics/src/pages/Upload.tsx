@@ -118,17 +118,7 @@ const Upload = () => {
       return;
     }
     
-    // Validate that a caption is provided
-    if (!caption) {
-      setError('Please add a caption for your photo');
-      return;
-    }
-    
-    // Validate that alt text is provided (for accessibility)
-    if (!altText) {
-      setError('Please add alt text for accessibility');
-      return;
-    }
+    // Caption and alt text are now optional
     
     setIsUploading(true);
     setError('');
@@ -147,10 +137,13 @@ const Upload = () => {
         setCaption('');
         setAltText('');
         
-        // Redirect to home after a short delay
+        // Get the current user's DID
+        const userDid = perchPicsService.getCurrentUserDid();
+        
+        // Redirect to profile page after a short delay
         setTimeout(() => {
-          navigate('/');
-        }, 2000);
+          navigate(`/profile/${userDid}`);
+        }, 1500);
       } else {
         setError('Failed to upload photo. Please try again.');
       }
@@ -208,7 +201,7 @@ const Upload = () => {
         
         {/* Caption input */}
         <div className="form-group">
-          <label htmlFor="caption">Caption</label>
+          <label htmlFor="caption">Caption (optional)</label>
           <textarea
             id="caption"
             value={caption}
@@ -216,13 +209,12 @@ const Upload = () => {
             placeholder="Write a caption for your photo..."
             rows={3}
             disabled={isUploading}
-            required
           />
         </div>
         
         {/* Alt text input for accessibility */}
         <div className="form-group">
-          <label htmlFor="altText">Alt Text (for accessibility)</label>
+          <label htmlFor="altText">Alt Text (optional, for accessibility)</label>
           <input
             type="text"
             id="altText"
@@ -230,7 +222,6 @@ const Upload = () => {
             onChange={(e) => setAltText(e.target.value)}
             placeholder="Describe your image for people with visual impairments"
             disabled={isUploading}
-            required
           />
         </div>
         

@@ -1,9 +1,8 @@
 /**
- * PerchPics Custom AT Protocol Service
+ * AT Protocol Service
  * 
- * This service handles interactions with our custom PDS (Personal Data Server)
- * instead of using the standard AT Protocol. This ensures that photos posted
- * on PerchPics remain exclusive to our application.
+ * This service handles all interactions with the AT Protocol,
+ * including authentication, posting, and retrieving data.
  */
 
 // API base URL for our custom PDS
@@ -219,11 +218,10 @@ class PerchPicsService {
   }
 
   /**
-   * Get a user's profile
-   * @param {string} did - The DID of the user
+   * Get the current user's profile
    * @returns {Promise<any>} The user's profile data
    */
-  async getProfile(did: string): Promise<any> {
+  async getProfile(): Promise<any> {
     try {
       const response = await fetch(`${PDS_URL}/auth/me`, {
         headers: {
