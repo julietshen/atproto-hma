@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import atProtoService from '../services/atproto';
-import Post from '../components/Post';
 
 // Import PDS_URL from the atproto service
 const PDS_URL = 'http://localhost:3001';
@@ -15,18 +14,19 @@ const Profile = () => {
 
   useEffect(() => {
     const fetchProfile = async () => {
-      if (!handle) return;
-      
       try {
         setIsLoading(true);
         
-        // Fetch profile data
-        const profileData = await atProtoService.getProfile(handle);
+        // Fetch profile data - we're using the current user's profile
+        // since that's what the getProfile method returns
+        const profileData = await atProtoService.getProfile();
         setProfile(profileData);
         
-        // Fetch user's posts
-        const userPosts = await atProtoService.getUserPosts(handle);
-        setPosts(userPosts);
+        if (profileData && profileData.did) {
+          // Fetch user's posts using the DID from the profile
+          const userPosts = await atProtoService.getUserPosts(profileData.did);
+          setPosts(userPosts);
+        }
       } catch (err) {
         console.error('Error fetching profile:', err);
         setError('Failed to load profile. Please try again later.');
@@ -36,7 +36,7 @@ const Profile = () => {
     };
 
     fetchProfile();
-  }, [handle]);
+  }, []);
 
   // Helper function to format the author name from DID
   const formatAuthorName = (did: string) => {
@@ -65,7 +65,7 @@ const Profile = () => {
         <div className="profile-info">
           <img 
             src={profile.avatar || 'https://place-hold.it/80x80'} 
-            alt={`${profile.displayName || profile.handle}'s avatar`}
+            alt={`${profile.displayName || formatAuthorName(profile.did)}'s avatar`}
             className="profile-avatar"
           />
           <div className="profile-details">
@@ -84,7 +84,7 @@ const Profile = () => {
                 <span className="profile-stat-label">following</span>
               </div>
               <div className="profile-stat">
-                <span className="profile-stat-count">{profile.postsCount || 0}</span>
+                <span className="profile-stat-count">{posts.length || 0}</span>
                 <span className="profile-stat-label">posts</span>
               </div>
             </div>
