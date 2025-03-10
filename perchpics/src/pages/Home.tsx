@@ -6,6 +6,7 @@ const Home = () => {
   const [posts, setPosts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [debugInfo, setDebugInfo] = useState<any>(null);
 
   useEffect(() => {
     const fetchTimeline = async () => {
@@ -13,15 +14,51 @@ const Home = () => {
         setIsLoading(true);
         const timeline = await atProtoService.getTimeline();
         
-        // Filter to only show posts with images
-        const postsWithImages = timeline.filter(post => 
-          post.post?.embed?.$type === 'app.bsky.embed.images'
-        );
+        // Store the raw timeline data for debugging
+        setDebugInfo(timeline);
         
-        setPosts(postsWithImages);
+        console.log('Timeline data:', timeline);
+        
+        if (!timeline || !Array.isArray(timeline.photos)) {
+          setError('Invalid timeline data format');
+          return;
+        }
+        
+        // Map the photos to the expected format for the Post component
+        const formattedPosts = timeline.photos.map(photo => ({
+          post: {
+            uri: photo.id,
+            cid: photo.blob_id,
+            record: {
+              text: photo.caption
+            },
+            embed: {
+              $type: 'app.bsky.embed.images',
+              images: [{
+                fullsize: `http://localhost:3001/blobs/${photo.blob_id}`,
+                alt: photo.alt_text || ''
+              }]
+            },
+            likeCount: 0,
+            repostCount: 0
+          },
+          author: {
+            did: photo.author_did,
+            handle: photo.author_did.split(':')[2] || 'user',
+            displayName: photo.author_did.split(':')[2] || 'User',
+            avatar: null
+          },
+          viewer: {
+            like: false,
+            repost: false
+          }
+        }));
+        
+        setPosts(formattedPosts);
       } catch (err) {
         console.error('Error fetching timeline:', err);
         setError('Failed to load timeline. Please try again later.');
+        setDebugInfo(err);
       } finally {
         setIsLoading(false);
       }
@@ -35,7 +72,17 @@ const Home = () => {
   }
 
   if (error) {
-    return <div className="error">{error}</div>;
+    return (
+      <div className="error-container">
+        <div className="error">{error}</div>
+        {debugInfo && (
+          <div className="debug-info">
+            <h3>Debug Information:</h3>
+            <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -46,6 +93,12 @@ const Home = () => {
         <div className="empty-state">
           <p>No photos in your timeline yet.</p>
           <p>Follow more users or upload your own photos!</p>
+          {debugInfo && (
+            <div className="debug-info">
+              <h3>Debug Information:</h3>
+              <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
+            </div>
+          )}
         </div>
       ) : (
         <div className="posts-container">

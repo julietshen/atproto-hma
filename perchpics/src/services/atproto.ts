@@ -197,17 +197,24 @@ class PerchPicsService {
         url += `&cursor=${cursor}`;
       }
       
+      console.log('Fetching timeline from URL:', url);
+      
       const response = await fetch(url);
       
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to get timeline');
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Timeline fetch error:', errorData);
+        throw new Error(errorData.error || `Failed to get timeline: ${response.status}`);
       }
       
-      return await response.json();
+      const data = await response.json();
+      console.log('Timeline response data:', data);
+      
+      return data;
     } catch (error) {
       console.error('Failed to get timeline:', error);
-      return { photos: [] };
+      // Return the error for better debugging instead of swallowing it
+      throw error;
     }
   }
 

@@ -105,30 +105,40 @@ export async function createDatabase() {
     },
     
     getAllPhotos: async (limit = 50, cursor) => {
-      let query = 'SELECT * FROM photos';
-      const params = [];
-      
-      if (cursor) {
-        query += ' WHERE created_at < ?';
-        params.push(cursor);
-      }
-      
-      query += ' ORDER BY created_at DESC LIMIT ?';
-      params.push(limit);
-      
-      const photos = await db.all(query, params);
-      
-      // Get tags for each photo
-      for (const photo of photos) {
-        const tags = await db.all(
-          'SELECT tag FROM photo_tags WHERE photo_id = ?',
-          [photo.id]
-        );
+      try {
+        console.log(`Database - getAllPhotos called with limit: ${limit}, cursor: ${cursor || 'none'}`);
         
-        photo.tags = tags.map(t => t.tag);
+        let query = 'SELECT p.*, u.username FROM photos p JOIN users u ON p.author_did = u.did';
+        const params = [];
+        
+        if (cursor) {
+          query += ' WHERE p.created_at < ?';
+          params.push(cursor);
+        }
+        
+        query += ' ORDER BY p.created_at DESC LIMIT ?';
+        params.push(limit);
+        
+        console.log(`Database - Executing query: ${query} with params:`, params);
+        
+        const photos = await db.all(query, params);
+        console.log(`Database - Found ${photos.length} photos`);
+        
+        // Get tags for each photo
+        for (const photo of photos) {
+          const tags = await db.all(
+            'SELECT tag FROM photo_tags WHERE photo_id = ?',
+            [photo.id]
+          );
+          
+          photo.tags = tags.map(t => t.tag);
+        }
+        
+        return photos;
+      } catch (error) {
+        console.error('Database error in getAllPhotos:', error);
+        throw error; // Re-throw to allow proper error handling upstream
       }
-      
-      return photos;
     },
     
     // Raw database access
