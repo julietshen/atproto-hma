@@ -18,8 +18,8 @@
   "description": "A simple photo sharing app built on the AT Protocol with its own custom Lexicon and PDS",
   "dependencies": {
     "@atproto/api": "^0.14.9",
-    "@types/react": "^19.0.10",
-    "@types/react-dom": "^19.0.4",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
     "@vitejs/plugin-react": "^4.3.4",
     "bcrypt": "^5.1.1",
     "body-parser": "^1.20.2",
@@ -27,9 +27,9 @@
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-router-dom": "^7.3.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.22.1",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",
     "vite": "^6.2.1"
@@ -50,7 +50,9 @@
     "are-we-there-yet": "^4.0.1",
     "gauge": "^5.0.1",
     "npmlog": "^7.0.1",
-    "inflight": "^2.0.0"
+    "inflight": "^2.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "engines": {
     "node": ">=16.0.0"
