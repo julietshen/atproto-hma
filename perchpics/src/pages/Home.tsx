@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import atProtoService from '../services/atproto';
-import Post from '../components/Post';
 
 // Import PDS_URL from the atproto service
 const PDS_URL = 'http://localhost:3001';
@@ -63,11 +62,6 @@ const Home = () => {
     return did;
   };
 
-  // Navigate to profile page
-  const goToProfile = () => {
-    navigate('/profile');
-  };
-
   if (isLoading) {
     return <div className="loading">Loading timeline...</div>;
   }
@@ -80,11 +74,6 @@ const Home = () => {
     <div className="home-container">
       <div className="home-header">
         <h1>Photo Feed</h1>
-        {isLoggedIn && (
-          <button onClick={goToProfile} className="profile-button">
-            My Profile
-          </button>
-        )}
       </div>
       
       {posts.length === 0 ? (
