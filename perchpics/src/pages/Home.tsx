@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import atProtoService from '../services/atproto';
 import Post from '../components/Post';
 
+// Import PDS_URL from the atproto service
+const PDS_URL = 'http://localhost:3001';
+
 const Home = () => {
   const [posts, setPosts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -11,14 +14,13 @@ const Home = () => {
     const fetchTimeline = async () => {
       try {
         setIsLoading(true);
-        const timeline = await atProtoService.getTimeline();
+        const response = await atProtoService.getTimeline();
         
-        // Filter to only show posts with images
-        const postsWithImages = timeline.filter(post => 
-          post.post?.embed?.$type === 'app.bsky.embed.images'
-        );
-        
-        setPosts(postsWithImages);
+        if (response && response.photos) {
+          setPosts(response.photos);
+        } else {
+          setPosts([]);
+        }
       } catch (err) {
         console.error('Error fetching timeline:', err);
         setError('Failed to load timeline. Please try again later.');
@@ -29,6 +31,15 @@ const Home = () => {
 
     fetchTimeline();
   }, []);
+
+  // Helper function to format the author name from DID
+  const formatAuthorName = (did: string) => {
+    if (did.startsWith('did:perchpics:')) {
+      // Extract username from DID
+      return did.replace('did:perchpics:', '');
+    }
+    return did;
+  };
 
   if (isLoading) {
     return <div className="loading">Loading timeline...</div>;
@@ -49,8 +60,31 @@ const Home = () => {
         </div>
       ) : (
         <div className="posts-container">
-          {posts.map((post) => (
-            <Post key={post.post.uri} post={post} />
+          {posts.map((photo) => (
+            <div key={photo.id} className="post">
+              <div className="post-header">
+                <span className="post-author">@{formatAuthorName(photo.author_did)}</span>
+              </div>
+              <div className="post-image-container">
+                <img 
+                  src={`${PDS_URL}/blobs/${photo.blob_id}`} 
+                  alt={photo.alt_text || photo.caption} 
+                  className="post-image"
+                />
+              </div>
+              <div className="post-content">
+                <p className="post-caption">{photo.caption}</p>
+                {photo.location && <p className="post-location">{photo.location}</p>}
+                {photo.tags && photo.tags.length > 0 && (
+                  <div className="post-tags">
+                    {photo.tags.map((tag: string) => (
+                      <span key={tag} className="post-tag">#{tag}</span>
+                    ))}
+                  </div>
+                )}
+                <p className="post-date">{new Date(photo.created_at).toLocaleString()}</p>
+              </div>
+            </div>
           ))}
         </div>
       )}
