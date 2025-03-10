@@ -1,0 +1,58 @@
+{
+  "name": "perchpics",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --experimental-json-modules ./node_modules/vite/bin/vite.js",
+    "build": "vite build",
+    "preview": "vite preview",
+    "pds": "node --experimental-json-modules src/pds/server.js",
+    "start": "concurrently \"npm run dev\" \"npm run pds\"",
+    "start:clean": "node -e \"try { require('child_process').execSync('lsof -ti:3000,3001 | xargs kill -9 2>/dev/null || true') } catch(e) {}\" && npm run start",
+    "clean": "rimraf dist",
+    "postinstall": "echo 'Note: Some deprecated packages are used by dependencies and cannot be removed.'"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "A simple photo sharing app built on the AT Protocol with its own custom Lexicon and PDS",
+  "dependencies": {
+    "@atproto/api": "^0.14.9",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "bcrypt": "^5.1.1",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.3.0",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7",
+    "vite": "^6.2.1"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/multer": "^1.4.11",
+    "concurrently": "^9.1.2",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.8.2"
+  },
+  "overrides": {
+    "glob": "^10.3.10",
+    "rimraf": "^5.0.5",
+    "are-we-there-yet": "^4.0.1",
+    "gauge": "^5.0.1",
+    "npmlog": "^7.0.1",
+    "inflight": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

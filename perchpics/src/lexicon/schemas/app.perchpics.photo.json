@@ -1,0 +1,51 @@
+{
+  "lexicon": 1,
+  "id": "app.perchpics.photo",
+  "description": "A photo post for the PerchPics application",
+  "defs": {
+    "main": {
+      "type": "record",
+      "key": "tid",
+      "record": {
+        "type": "object",
+        "required": ["image", "caption", "createdAt"],
+        "properties": {
+          "image": {
+            "type": "blob",
+            "accept": ["image/jpeg", "image/png", "image/webp"],
+            "maxSize": 5000000
+          },
+          "caption": {
+            "type": "string",
+            "maxLength": 500,
+            "description": "Caption for the photo"
+          },
+          "altText": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Alt text for accessibility"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 50
+            },
+            "maxLength": 10,
+            "description": "Tags associated with the photo"
+          },
+          "location": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "Optional location information"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "datetime",
+            "description": "Timestamp when the photo was created"
+          }
+        }
+      }
+    }
+  }
+} 
