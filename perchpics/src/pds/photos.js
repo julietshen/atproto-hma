@@ -123,8 +123,12 @@ export function setupPhotoRoutes(app, db) {
       const limit = parseInt(req.query.limit) || 50;
       const cursor = req.query.cursor;
       
+      console.log(`GET /photos - Fetching timeline with limit: ${limit}, cursor: ${cursor || 'none'}`);
+      
       // Get the photos
       const photos = await db.getAllPhotos(limit, cursor);
+      
+      console.log(`GET /photos - Found ${photos.length} photos`);
       
       // Return the photos
       res.json({ 
@@ -133,7 +137,7 @@ export function setupPhotoRoutes(app, db) {
       });
     } catch (error) {
       console.error('Get photos error:', error);
-      res.status(500).json({ error: 'Failed to get photos' });
+      res.status(500).json({ error: 'Failed to get photos', details: error.message });
     }
   });
   
