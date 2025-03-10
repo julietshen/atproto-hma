@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import atProtoService from '../services/atproto';
 import Post from '../components/Post';
 
@@ -9,12 +10,33 @@ const Home = () => {
   const [posts, setPosts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
+    // Check if user is logged in
+    const checkLoginStatus = () => {
+      const loggedIn = atProtoService.isLoggedIn();
+      setIsLoggedIn(loggedIn);
+      return loggedIn;
+    };
+
     const fetchTimeline = async () => {
       try {
         setIsLoading(true);
+        
+        // First check if user is logged in
+        const loggedIn = checkLoginStatus();
+        if (!loggedIn) {
+          console.log('User not logged in, redirecting to login');
+          navigate('/login');
+          return;
+        }
+        
+        console.log('Fetching timeline...');
         const response = await atProtoService.getTimeline();
+        console.log('Timeline response:', response);
         
         if (response && response.photos) {
           setPosts(response.photos);
@@ -30,7 +52,7 @@ const Home = () => {
     };
 
     fetchTimeline();
-  }, []);
+  }, [location.key, navigate]); // Re-fetch when location changes or navigate changes
 
   // Helper function to format the author name from DID
   const formatAuthorName = (did: string) => {
@@ -39,6 +61,11 @@ const Home = () => {
       return did.replace('did:perchpics:', '');
     }
     return did;
+  };
+
+  // Navigate to profile page
+  const goToProfile = () => {
+    navigate('/profile');
   };
 
   if (isLoading) {
@@ -51,7 +78,14 @@ const Home = () => {
 
   return (
     <div className="home-container">
-      <h1>Photo Feed</h1>
+      <div className="home-header">
+        <h1>Photo Feed</h1>
+        {isLoggedIn && (
+          <button onClick={goToProfile} className="profile-button">
+            My Profile
+          </button>
+        )}
+      </div>
       
       {posts.length === 0 ? (
         <div className="empty-state">

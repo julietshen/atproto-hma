@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import atProtoService from '../services/atproto';
 
 // Import PDS_URL from the atproto service
@@ -11,21 +11,42 @@ const Profile = () => {
   const [posts, setPosts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const fetchProfile = async () => {
       try {
         setIsLoading(true);
         
-        // Fetch profile data - we're using the current user's profile
-        // since that's what the getProfile method returns
+        // Fetch profile data
         const profileData = await atProtoService.getProfile();
-        setProfile(profileData);
+        console.log('Profile data:', profileData);
         
-        if (profileData && profileData.did) {
-          // Fetch user's posts using the DID from the profile
-          const userPosts = await atProtoService.getUserPosts(profileData.did);
-          setPosts(userPosts);
+        // The /auth/me endpoint returns { user: { username, did } }
+        if (profileData && profileData.user) {
+          setProfile({
+            ...profileData.user,
+            displayName: profileData.user.username // Use username as displayName
+          });
+        } else {
+          setError('Profile data not available');
+          return;
+        }
+        
+        // Get the current user's DID directly from the service
+        const userDid = atProtoService.getCurrentUserDid();
+        console.log('Current user DID:', userDid);
+        
+        if (userDid) {
+          console.log('Fetching posts for DID:', userDid);
+          // Fetch user's posts using the DID from the service
+          const userPosts = await atProtoService.getUserPosts(userDid);
+          console.log('User posts:', userPosts);
+          setPosts(userPosts || []);
+        } else {
+          console.error('No user DID available');
+          setError('User not found');
         }
       } catch (err) {
         console.error('Error fetching profile:', err);
@@ -36,7 +57,7 @@ const Profile = () => {
     };
 
     fetchProfile();
-  }, []);
+  }, [location.key]); // Re-fetch when location changes (e.g., when using back button)
 
   // Helper function to format the author name from DID
   const formatAuthorName = (did: string) => {
@@ -45,6 +66,11 @@ const Profile = () => {
       return did.replace('did:perchpics:', '');
     }
     return did;
+  };
+
+  // Handle back button click
+  const handleBackClick = () => {
+    navigate('/');
   };
 
   if (isLoading) {
@@ -61,6 +87,10 @@ const Profile = () => {
 
   return (
     <div className="profile-container">
+      <button onClick={handleBackClick} className="back-button">
+        &larr; Back to Home
+      </button>
+      
       <div className="profile-header">
         <div className="profile-info">
           <img 
