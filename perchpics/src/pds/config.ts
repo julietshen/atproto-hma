@@ -11,8 +11,33 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Configuration interface
+export interface PDSConfig {
+  server: {
+    host: string;
+    port: number;
+  };
+  cors: {
+    origin: string[];
+    methods: string[];
+    allowedHeaders: string[];
+  };
+  db: {
+    location: string;
+  };
+  storage: {
+    directory: string;
+    maxSize: number;
+    allowedTypes: string[];
+  };
+  auth: {
+    secret: string;
+    tokenExpiration: string;
+  };
+}
+
 // PDS configuration
-export const pdsConfig = {
+export const pdsConfig: PDSConfig = {
   // Server settings
   server: {
     host: 'localhost',
@@ -22,10 +47,8 @@ export const pdsConfig = {
   // CORS settings
   cors: {
     origin: ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
-    exposedHeaders: ['Content-Length', 'Content-Type'],
-    credentials: true
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization']
   },
   
   // Database settings
@@ -45,4 +68,6 @@ export const pdsConfig = {
     secret: 'perchpics-secret-key-change-in-production',
     tokenExpiration: '7d'
   }
-}; 
+};
+
+export default pdsConfig; 
