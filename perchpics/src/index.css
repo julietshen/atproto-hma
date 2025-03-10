@@ -449,4 +449,34 @@ input, textarea {
 
 .reposted {
   color: var(--success-color);
+}
+
+/* Navigation buttons */
+.back-button {
+  margin-bottom: 20px;
+  display: inline-flex;
+  align-items: center;
+  font-weight: 500;
+}
+
+.back-button:before {
+  margin-right: 5px;
+}
+
+.profile-button {
+  margin-left: 15px;
+}
+
+.home-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+/* Make sure the profile container has proper spacing */
+.profile-container {
+  padding: 20px;
+  max-width: 800px;
+  margin: 0 auto;
 } 
