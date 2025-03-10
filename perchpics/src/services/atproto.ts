@@ -151,32 +151,39 @@ class PerchPicsService {
    * @param {string} altText - Alt text for accessibility
    * @returns {Promise<any>} The uploaded photo data
    */
-  async uploadImage(file: File, caption: string, altText: string): Promise<any> {
-    try {
-      if (!this.isLoggedIn()) {
-        throw new Error('User not logged in');
-      }
+  async uploadImage(file: File, caption?: string, altText?: string): Promise<any> {
+    if (!this.isLoggedIn()) {
+      throw new Error('User must be logged in to upload images');
+    }
 
-      // Create form data
+    try {
       const formData = new FormData();
       formData.append('image', file);
-      formData.append('caption', caption);
-      formData.append('altText', altText);
       
-      // Upload the image
+      // Only add caption and altText if provided
+      if (caption) {
+        formData.append('caption', caption);
+      }
+      
+      if (altText) {
+        formData.append('altText', altText);
+      }
+
       const response = await fetch(`${PDS_URL}/photos`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.token}`
         },
-        body: formData
+        body: formData,
+        credentials: 'include',
+        mode: 'cors'
       });
-      
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to upload image');
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `Upload failed: ${response.status}`);
       }
-      
+
       return await response.json();
     } catch (error) {
       console.error('Failed to upload image:', error);
@@ -197,24 +204,17 @@ class PerchPicsService {
         url += `&cursor=${cursor}`;
       }
       
-      console.log('Fetching timeline from URL:', url);
-      
       const response = await fetch(url);
       
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('Timeline fetch error:', errorData);
-        throw new Error(errorData.error || `Failed to get timeline: ${response.status}`);
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to get timeline');
       }
       
-      const data = await response.json();
-      console.log('Timeline response data:', data);
-      
-      return data;
+      return await response.json();
     } catch (error) {
       console.error('Failed to get timeline:', error);
-      // Return the error for better debugging instead of swallowing it
-      throw error;
+      return { photos: [] };
     }
   }
 

@@ -9,15 +9,26 @@ import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
 import crypto from 'crypto';
+import { Request, Response, Express, RequestHandler } from 'express';
 import { pdsConfig } from './config.js';
 import { authenticateToken } from './auth.js';
+import { PDSDB, PhotoData } from './database.js';
+
+// Request with user property
+interface AuthRequest extends Request {
+  user?: {
+    username: string;
+    did: string;
+  };
+  file?: Express.Multer.File;
+}
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
+  destination: (req: Request, file: Express.Multer.File, cb: (error: Error | null, destination: string) => void) => {
     cb(null, pdsConfig.storage.directory);
   },
-  filename: (req, file, cb) => {
+  filename: (req: Request, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
     const ext = path.extname(file.originalname);
     const id = crypto.randomBytes(16).toString('hex');
     cb(null, `${id}${ext}`);
@@ -29,7 +40,7 @@ const upload = multer({
   limits: {
     fileSize: pdsConfig.storage.maxSize
   },
-  fileFilter: (req, file, cb) => {
+  fileFilter: (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
     if (pdsConfig.storage.allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
@@ -39,11 +50,11 @@ const upload = multer({
 });
 
 // Setup photo routes
-export function setupPhotoRoutes(app, db) {
+export function setupPhotoRoutes(app: Express, db: PDSDB): void {
   // Upload a photo
-  app.post('/photos', authenticateToken, upload.single('image'), async (req, res) => {
+  app.post('/photos', authenticateToken, upload.single('image'), (async (req: AuthRequest, res: Response) => {
     try {
-      const { did } = req.user;
+      const { did } = req.user!;
       const { caption, altText, location, tags } = req.body;
       
       // Validate input
@@ -63,7 +74,7 @@ export function setupPhotoRoutes(app, db) {
       );
       
       // Create photo record
-      const photoData = {
+      const photoData: PhotoData = {
         caption,
         altText: altText || null,
         location: location || null,
@@ -80,10 +91,10 @@ export function setupPhotoRoutes(app, db) {
       console.error('Photo upload error:', error);
       res.status(500).json({ error: 'Failed to upload photo' });
     }
-  });
+  }) as RequestHandler);
   
   // Get a photo by ID
-  app.get('/photos/:id', async (req, res) => {
+  app.get('/photos/:id', (async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       
@@ -99,10 +110,10 @@ export function setupPhotoRoutes(app, db) {
       console.error('Get photo error:', error);
       res.status(500).json({ error: 'Failed to get photo' });
     }
-  });
+  }) as RequestHandler);
   
   // Get photos by user
-  app.get('/users/:did/photos', async (req, res) => {
+  app.get('/users/:did/photos', (async (req: Request, res: Response) => {
     try {
       const { did } = req.params;
       
@@ -115,13 +126,13 @@ export function setupPhotoRoutes(app, db) {
       console.error('Get user photos error:', error);
       res.status(500).json({ error: 'Failed to get user photos' });
     }
-  });
+  }) as RequestHandler);
   
   // Get all photos (timeline)
-  app.get('/photos', async (req, res) => {
+  app.get('/photos', (async (req: Request, res: Response) => {
     try {
-      const limit = parseInt(req.query.limit) || 50;
-      const cursor = req.query.cursor;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const cursor = req.query.cursor as string | undefined;
       
       // Get the photos
       const photos = await db.getAllPhotos(limit, cursor);
@@ -135,10 +146,10 @@ export function setupPhotoRoutes(app, db) {
       console.error('Get photos error:', error);
       res.status(500).json({ error: 'Failed to get photos' });
     }
-  });
+  }) as RequestHandler);
   
   // Serve photo files
-  app.get('/blobs/:id', (req, res) => {
+  app.get('/blobs/:id', ((req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const filePath = path.join(pdsConfig.storage.directory, id);
@@ -154,5 +165,5 @@ export function setupPhotoRoutes(app, db) {
       console.error('Serve file error:', error);
       res.status(500).json({ error: 'Failed to serve file' });
     }
-  });
+  }) as RequestHandler);
 } 

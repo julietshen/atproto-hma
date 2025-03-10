@@ -90,6 +90,46 @@ The service follows a layered architecture:
    - Add more examples for different integration scenarios
    - Create troubleshooting guide
 
+## PerchPics Application Notes
+
+### 2025-03-10: React Compatibility Findings
+
+During development of the PerchPics application, we encountered critical compatibility issues that were resolved by using specific dependency versions. These findings are important for future development:
+
+#### Key Compatibility Requirements
+
+1. **React and React Router Versions**:
+   - **Working Configuration**: React 18.2.0 and React Router 6.22.1
+   - **Problematic Configuration**: React 19.0.0 and React Router 7.3.0
+   - **Issue**: React 19 introduces breaking changes that are incompatible with our application structure and React Router 7 has significant API changes
+
+2. **Authentication Implementation**:
+   - The custom AT Protocol service (atproto.ts) handles authentication locally
+   - Tokens are stored in localStorage with clear isLoggedIn() functionality
+   - The PDS (Personal Data Server) implementation must be complete and functional
+
+3. **Application Structure**:
+   - Clean, straightforward structure with a simple App.tsx that handles routing and authentication
+   - Standard React Router v6 patterns with Routes and Route components
+   - Well-defined authentication flow
+
+4. **Backend Integration**:
+   - PDS server configured to run on port 3001
+   - Frontend configured to communicate with this server
+   - Database setup includes automatic creation of a demo user
+
+#### Troubleshooting Notes
+
+If the application shows a blank page or fails to render:
+1. Check React and React Router versions - must use React 18.x and React Router 6.x
+2. Verify the root element exists in index.html
+3. Ensure authentication flow is properly implemented
+4. Check for console errors related to hooks or routing
+
+#### Commit Reference
+
+The working version is based on commit c5573bad822e02be096d225da84367e1cbe8ac98, which should be used as the reference implementation for any future development.
+
 ## Implementation Notes
 
 ### Key Design Decisions

@@ -6,12 +6,42 @@
  */
 
 import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
+import { open, Database } from 'sqlite';
 import { pdsConfig } from './config.js';
 import bcrypt from 'bcrypt';
 
+// Photo data interface
+export interface PhotoData {
+  caption: string;
+  altText: string | null;
+  location: string | null;
+  tags: string[];
+  blobId: string;
+  createdAt: string;
+}
+
+// Database interface
+export interface PDSDB {
+  // User methods
+  createUser(username: string, passwordHash: string, did: string): Promise<any>;
+  getUserByUsername(username: string): Promise<any>;
+  getUserByDid(did: string): Promise<any>;
+  
+  // Photo methods
+  createPhoto(did: string, photoData: PhotoData): Promise<any>;
+  getPhotoById(photoId: string): Promise<any>;
+  getPhotosByUser(did: string): Promise<any[]>;
+  getAllPhotos(limit: number, cursor?: string): Promise<any[]>;
+  
+  // Raw database access
+  exec(sql: string): Promise<any>;
+  get(sql: string, params?: any[]): Promise<any>;
+  all(sql: string, params?: any[]): Promise<any[]>;
+  run(sql: string, params?: any[]): Promise<any>;
+}
+
 // Create and initialize the database
-export async function createDatabase() {
+export async function createDatabase(): Promise<PDSDB> {
   // Open the database
   const db = await open({
     filename: pdsConfig.db.location,
@@ -106,7 +136,7 @@ export async function createDatabase() {
     
     getAllPhotos: async (limit = 50, cursor) => {
       let query = 'SELECT * FROM photos';
-      const params = [];
+      const params: any[] = [];
       
       if (cursor) {
         query += ' WHERE created_at < ?';
@@ -132,7 +162,7 @@ export async function createDatabase() {
     },
     
     // Raw database access
-    exec: (sql, params) => db.exec(sql, params),
+    exec: (sql) => db.exec(sql),
     get: (sql, params) => db.get(sql, params),
     all: (sql, params) => db.all(sql, params),
     run: (sql, params) => db.run(sql, params)
@@ -140,7 +170,7 @@ export async function createDatabase() {
 }
 
 // Create database tables
-async function createTables(db) {
+async function createTables(db: Database) {
   // Users table
   await db.exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -187,7 +217,7 @@ async function createTables(db) {
 }
 
 // Create a demo user if it doesn't exist
-async function createDemoUser(db) {
+async function createDemoUser(db: Database) {
   try {
     // Check if demo user already exists
     const existingUser = await db.get('SELECT * FROM users WHERE username = ?', ['demo']);
