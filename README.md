@@ -1,157 +1,154 @@
-# AT Protocol Hasher-Matcher-Actioner (HMA) Integration
+# AT Protocol + HMA Integration
 
-A lightweight, efficient integration of Meta's Hasher-Matcher-Actioner (HMA) with AT Protocol applications for content moderation. This solution supports NCMEC hash database scanning and is suitable for small Bluesky PDS hosts and independent AppView operators.
+This project integrates [AT Protocol](https://atproto.com/) with Meta's [Hasher-Matcher-Actioner (HMA)](https://github.com/facebook/ThreatExchange/tree/main/hasher-matcher-actioner) for content moderation.
 
 ## Overview
 
-This project integrates Meta's Hasher-Matcher-Actioner (HMA) system with the AT Protocol to provide efficient content moderation capabilities. It allows PDS hosts and AppView operators to:
+The integration consists of three main components:
 
-- Hash images during upload using PDQ and other algorithms
-- Match hashes against known databases (like NCMEC)
-- Take appropriate actions based on matches
-- Maintain compliance logs for legal requirements
+1. **HMA Service**: A containerized implementation of Meta's HMA service that provides hashing and matching capabilities
+2. **ATProto-HMA Integration Service**: A Python Flask service that bridges AT Protocol and HMA
+3. **PerchPics**: A sample AT Protocol application that demonstrates the integration in action
 
-## Features
+## Prerequisites
 
-- **Seamless AT Protocol Integration**: Hooks directly into the AT Protocol's image upload and processing pipeline
-- **Efficient Hash-Based Content Moderation**: Uses Meta's HMA implementation for robust content matching
-- **NCMEC Hash Database Support**: Compatible with the National Center for Missing and Exploited Children hash database
-- **Lightweight Design**: Optimized for small teams and indie developers with minimal resource usage
-- **Compliance Logging**: Secure, tamper-proof, and auditable logs for all matches
-- **Robust Error Handling**: Graceful handling of service downtime, database failures, and other issues
+- Docker and Docker Compose
+- Node.js (v16+) and npm for local development
+- Git
 
-## Implementation Details
+## Project Structure
 
-This integration is built as a standalone service that communicates with both the HMA service and AT Protocol applications. It provides:
-
-1. **REST API**: Endpoints for hashing, matching, and taking actions
-2. **Webhook Support**: Receive callbacks from AT Protocol and send notifications back
-3. **Database Storage**: Store hashes, matches, and actions for auditing and compliance
-4. **Client Libraries**: Easy-to-use clients for HMA and AT Protocol
-
-### Architecture
-
-The service follows a layered architecture:
+The project is organized into two main directories:
 
 ```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│                 │     │                 │     │                 │
-│  AT Protocol    │◄────┤  AT Protocol    │◄────┤  HMA Service    │
-│  Application    │     │  HMA Integration│     │                 │
-│  (PDS/AppView)  │────►│                 │────►│                 │
-│                 │     │                 │     │                 │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
+ROOST/
+├── atproto-hma/            # Integration service and Docker configuration
+│   ├── src/                # Integration service source code
+│   ├── scripts/            # Helper scripts including DB initialization
+│   ├── Dockerfile          # Dockerfile for the integration service
+│   ├── docker-compose.yml  # Docker Compose configuration for all services
+│   ├── integration-test.sh # Integration test script
+│   └── requirements.txt    # Python dependencies
+└── perchpics/              # Sample AT Protocol application
+    ├── src/                # Application source code
+    ├── Dockerfile          # Dockerfile for PerchPics
+    └── package.json        # Node.js dependencies
 ```
 
-For more details, see the [Architecture Document](docs/architecture.md).
+## Quick Start
 
-## Installation
+### Option 1: Running with Docker Compose (Recommended)
 
-### Prerequisites
-
-- Python 3.10+
-- PostgreSQL database
-- AT Protocol PDS or AppView instance
-
-### Setup
-
-1. Clone this repository:
+1. Clone the repositories:
    ```
-   git clone https://github.com/julietshen/atproto-hma.git
+   mkdir -p ROOST && cd ROOST
+   git clone https://github.com/your-username/atproto-hma.git
+   git clone https://github.com/your-username/perchpics.git
    cd atproto-hma
    ```
 
-2. Install dependencies:
+2. Run the integration test script:
    ```
-   pip install -r requirements.txt
-   ```
-
-3. Configure the environment:
-   ```
-   cp .env.example .env
-   # Edit .env with your configuration
+   ./integration-test.sh
    ```
 
-4. Initialize the database:
-   ```
-   python -m src.db.init
-   ```
+This will start all services and verify they are working correctly.
 
-5. Start the service:
-   ```
-   python -m src.main
-   ```
+3. Access PerchPics at http://localhost:3000
 
-### Docker Deployment
+### Option 2: Running Components Separately
 
-For production deployment, we recommend using Docker Compose:
+#### 1. Start the Database and HMA services:
 
 ```
-docker-compose up -d
+cd atproto-hma
+docker-compose up -d db hma
 ```
 
-This will start:
-- The AT Protocol HMA Integration service
-- The HMA service
-- A PostgreSQL database
+#### 2. Start the ATProto-HMA Integration Service:
+
+```
+cd atproto-hma
+docker-compose up -d atproto-hma
+```
+
+#### 3. Start PerchPics locally:
+
+```
+cd ../perchpics
+npm install
+npm run start
+```
 
 ## Configuration
 
-Configuration is handled through environment variables or a `.env` file. See `.env.example` for all available options.
+### HMA Service Configuration
 
-### Key Configuration Options
+The HMA service uses the following environment variables:
+
+- `POSTGRES_USER`: Database username (default: media_match)
+- `POSTGRES_PASSWORD`: Database password
+- `POSTGRES_HOST`: Database host
+- `POSTGRES_PORT`: Database port
+- `POSTGRES_DBNAME`: Database name
+
+### ATProto-HMA Integration Service Configuration
 
 - `DATABASE_URL`: PostgreSQL connection string
-- `HMA_API_URL`: URL of the HMA service
-- `AT_PROTOCOL_PDS_URL`: URL of your PDS instance
-- `NCMEC_API_KEY`: API key for NCMEC hash database (if applicable)
-- `LOG_LEVEL`: Logging level (DEBUG, INFO, WARNING, ERROR)
+- `HMA_API_URL`: URL to the HMA service
+- `LOG_LEVEL`: Logging level
+- `PORT`: Port for the service
+- `HOST`: Host for the service
 
-## Usage
+### PerchPics Configuration
 
-### For PDS Operators
+- `PDS_PORT`: Personal Data Server port (default: 3002)
+- `PDS_HOST`: Personal Data Server host
+- `VITE_PORT`: Vite development server port (default: 3000)
+- `VITE_HOST`: Vite development server host
+- `HMA_API_URL`: URL to the ATProto-HMA Integration Service
 
-1. Configure the integration to point to your PDS instance
-2. Enable the middleware in your PDS configuration
-3. Monitor the logs for any matches
+## Testing the Integration
 
-See the [Integration Guide](docs/integration_guide.md) for detailed instructions.
+1. Start all services using the integration test script
+2. Create a user in PerchPics and log in
+3. Upload an image to test the moderation flow
+4. Check the logs to see the moderation decisions:
+   ```
+   cd atproto-hma
+   docker-compose logs -f
+   ```
 
-### For AppView Developers
+## Troubleshooting
 
-1. Configure the integration to work with your AppView
-2. Add the necessary hooks to your image processing pipeline
-3. Implement appropriate UI for moderator actions
+### Database Connection Issues
 
-See the [Integration Guide](docs/integration_guide.md) for detailed instructions.
+If you experience database connection issues, verify:
 
-## API Documentation
+1. The database service is running: `docker-compose ps db`
+2. The connection parameters match in both the service and database container
+3. The database initialization script has completed successfully
 
-### Endpoints
+### Port Conflicts
 
-- `POST /api/v1/hash`: Hash an image
-- `POST /api/v1/hash/url`: Hash an image from a URL
-- `POST /api/v1/match`: Match a hash against the database
-- `POST /api/v1/match/batch`: Match multiple hashes in batch
-- `POST /api/v1/action`: Take action based on a match
-- `POST /api/v1/action/batch`: Take multiple actions in batch
-- `POST /api/v1/webhook/hma-callback`: Receive callbacks from HMA
-- `POST /api/v1/webhook/atproto-callback`: Receive callbacks from AT Protocol
-- `GET /api/v1/status`: Get service status
-- `GET /api/v1/status/metrics`: Get service metrics
+If you encounter port conflicts:
 
-## Documentation
+1. Modify the exposed ports in docker-compose.yml
+2. Update corresponding environment variables in the services
 
-For more detailed documentation, see the [docs](./docs) directory:
+### Common Issues
 
-- [Architecture Document](docs/architecture.md)
-- [Integration Guide](docs/integration_guide.md)
+#### PerchPics Cannot Connect to HMA Service
 
-## License
+When running locally:
+- Ensure that PerchPics is using `http://localhost:3000/api/v1` as the HMA_API_URL (for local dev)
+- Ensure that the atproto-hma service is running on port 3000
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+When running in Docker:
+- Ensure that PerchPics is using `http://atproto-hma:3000/api/v1` as the HMA_API_URL 
+- Ensure that all services are on the same Docker network
 
-## Acknowledgements
+## Contributing
 
 - [Meta's Hasher-Matcher-Actioner](https://github.com/facebook/ThreatExchange/tree/main/hasher-matcher-actioner)
 - [AT Protocol](https://atproto.com/)
