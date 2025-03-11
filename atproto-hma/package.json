@@ -1,0 +1,12 @@
+{
+  "name": "atproto-hma-poc",
+  "version": "0.1.0",
+  "description": "Proof of concept for AT Protocol and HMA integration",
+  "main": "poc-test.js",
+  "scripts": {
+    "test": "node poc-test.js"
+  },
+  "dependencies": {
+    "node-fetch": "^2.6.7"
+  }
+} 
