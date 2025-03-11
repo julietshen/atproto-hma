@@ -16,7 +16,7 @@ import { config } from '../config.js';
 EventEmitter.defaultMaxListeners = 20;
 
 /**
- * Utility function for colorful console logging with configurable verbosity
+ * Log a message with HMA-specific formatting
  * @param {string} level - The log level: 'success', 'info', 'warn', 'error', 'debug'
  * @param {string} message - The main message to log
  * @param {object} details - Optional details to include
@@ -29,13 +29,19 @@ function hmaLog(level, message, details = null, minVerbosity = 1) {
   }
   
   const timestamp = new Date().toISOString();
+  const useColors = process.env.HMA_COLORFUL_LOGGING === 'true';
+  
   const colors = {
-    reset: '\x1b[0m',
-    success: '\x1b[32m', // green
-    info: '\x1b[36m',    // cyan
-    warn: '\x1b[33m',    // yellow
-    error: '\x1b[31m',   // red
-    debug: '\x1b[90m'    // gray
+    reset: useColors ? '\x1b[0m' : '',
+    success: useColors ? '\x1b[32m' : '', // green
+    info: useColors ? '\x1b[36m' : '',    // cyan
+    warn: useColors ? '\x1b[33m' : '',    // yellow
+    error: useColors ? '\x1b[31m' : '',   // red
+    debug: useColors ? '\x1b[90m' : '',   // gray
+    nomatch: useColors ? '\x1b[34m' : '', // blue - for no match messages
+    bright: useColors ? '\x1b[1m' : '',   // bright/bold
+    dim: useColors ? '\x1b[2m' : '',      // dim
+    underline: useColors ? '\x1b[4m' : '' // underline
   };
   
   // Prefix emojis for logs
@@ -44,19 +50,141 @@ function hmaLog(level, message, details = null, minVerbosity = 1) {
     info: 'ℹ️',
     warn: '⚠️',
     error: '❌',
-    debug: '🔍'
+    debug: '🔍',
+    nomatch: '❎'  // Add a specific emoji for no match
   };
   
   // Format the message
-  const prefix = `${emojis[level]} HMA ${level.toUpperCase()}:`;
-  console.log(`${colors[level]}${prefix}${colors.reset} ${message}`);
+  const prefix = `${emojis[level]} ${colors[level]}HMA ${level.toUpperCase()}:${colors.reset}`;
   
-  // Log details if present and verbosity is high enough
-  if (details && minVerbosity <= config.hma.logging.verbosity) {
-    if (typeof details === 'string') {
+  // Special formatting for match results to make them more visually distinct
+  if (message.includes('SIGNIFICANT MATCH FOUND')) {
+    // For significant match results, create a visually distinct format
+    const formattedMessage = `${colors.bright}${colors.success}${message}${colors.reset}`;
+    console.log(`${prefix} ${formattedMessage}`);
+    
+    // Always add a separator for significant matches
+    console.log(`   ${colors.dim}----------------------------------------${colors.reset}`);
+    
+    // Format the details with proper coloring and indentation
+    if (details) {
+      if (details.action) {
+        console.log(`   ${colors.bright}action:${colors.reset} ${colors.success}${details.action}${colors.reset}`);
+      }
+      if (details.significantMatches) {
+        console.log(`   ${colors.bright}significantMatches:${colors.reset} ${details.significantMatches}`);
+      }
+      if (details.matchThreshold) {
+        console.log(`   ${colors.bright}matchThreshold:${colors.reset} ${details.matchThreshold}`);
+      }
+      if (details.hash) {
+        console.log(`   ${colors.bright}hash:${colors.reset} ${colors.dim}${details.hash}${colors.reset}`);
+      }
+    }
+    
+    // Add a closing separator
+    console.log(`   ${colors.dim}----------------------------------------${colors.reset}`);
+  } else if (message.includes('NO MATCH FOUND')) {
+    // For no match results, create a visually distinct format with blue color
+    const formattedMessage = `${colors.bright}${colors.nomatch}${message}${colors.reset}`;
+    console.log(`${prefix} ${formattedMessage}`);
+    
+    // Add a separator
+    console.log(`   ${colors.dim}----------------------------------------${colors.reset}`);
+    
+    // Format the details similar to significant match
+    if (details) {
+      if (details.matchCount !== undefined) {
+        console.log(`   ${colors.bright}matchCount:${colors.reset} ${details.matchCount}`);
+      }
+      if (details.filename) {
+        console.log(`   ${colors.bright}filename:${colors.reset} ${details.filename}`);
+      }
+      if (details.matchThreshold) {
+        console.log(`   ${colors.bright}matchThreshold:${colors.reset} ${details.matchThreshold}`);
+      }
+      if (details.imageHash) {
+        console.log(`   ${colors.bright}hash:${colors.reset} ${colors.dim}${details.imageHash}${colors.reset}`);
+      }
+    }
+    
+    // Add a closing separator
+    console.log(`   ${colors.dim}----------------------------------------${colors.reset}`);
+  } else if (message.includes('matches for image')) {
+    // For match success, highlight key information
+    const formattedMessage = message
+      .replace(/Found (\d+) matches/g, `Found ${colors.bright}$1${colors.reset} matches`);
+    
+    console.log(`${prefix} ${formattedMessage}`);
+    
+    // Log details for match information
+    if (details) {
+      if (details.matchCount !== undefined) {
+        console.log(`   ${colors.bright}matchCount:${colors.reset} ${details.matchCount}`);
+      }
+      if (details.filename) {
+        console.log(`   ${colors.bright}filename:${colors.reset} ${details.filename}`);
+      }
+      if (details.firstMatch && typeof details.firstMatch === 'object') {
+        const firstMatchStr = JSON.stringify(details.firstMatch, null, 2)
+          .replace(/{|}|"|,/g, '');
+        console.log(`   ${colors.bright}firstMatch:${colors.reset} ${colors.dim}${firstMatchStr}${colors.reset}`);
+      }
+    }
+    
+    // Add a separator after match details
+    console.log(`   ${colors.dim}----------------------------------------${colors.reset}`);
+  } else if (message.includes('did not match any entries')) {
+    // Special case for non-matching images - use blue coloring
+    const formattedMessage = `${colors.nomatch}${message}${colors.reset}`;
+    console.log(`${prefix} ${formattedMessage}`);
+    
+    // Add detailed formatting similar to the match case
+    if (details) {
+      // Format the details with proper coloring and indentation
+      if (details.matchCount !== undefined) {
+        console.log(`   ${colors.bright}matchCount:${colors.reset} ${details.matchCount}`);
+      }
+      if (details.filename) {
+        console.log(`   ${colors.bright}filename:${colors.reset} ${details.filename}`);
+      }
+      if (details.matchThreshold) {
+        console.log(`   ${colors.bright}matchThreshold:${colors.reset} ${details.matchThreshold}`);
+      }
+      if (details.imageHash) {
+        console.log(`   ${colors.bright}hash:${colors.reset} ${colors.dim}${details.imageHash}${colors.reset}`);
+      }
+    }
+    
+    // Add a separator after non-match message for visual distinction
+    console.log(`   ${colors.dim}----------------------------------------${colors.reset}`);
+  } else {
+    // Regular message
+    console.log(`${prefix} ${message}`);
+    
+    // Log details if present
+    if (details && typeof details === 'object') {
+      // If it's a simple object with status info
+      if (details.url && details.status) {
+        console.log(`   ${colors.dim}url:${colors.reset} ${details.url}`);
+        console.log(`   ${colors.dim}status:${colors.reset} ${details.status}`);
+        if (details.endpoint) {
+          console.log(`   ${colors.dim}endpoint:${colors.reset} ${details.endpoint}`);
+        }
+        
+        // Add a separator after health check details
+        console.log(`   ${colors.dim}----------------------------------------${colors.reset}`);
+      } 
+      // Any other detailed objects
+      else if (Object.keys(details).length > 0 && minVerbosity <= config.hma.logging.verbosity) {
+        for (const [key, value] of Object.entries(details)) {
+          if (value !== undefined && value !== null) {
+            console.log(`   ${colors.dim}${key}:${colors.reset} ${value}`);
+          }
+        }
+      }
+    } else if (details && typeof details === 'string' && minVerbosity <= config.hma.logging.verbosity) {
       console.log(`   ${details}`);
-    } else {
-      console.log(`   ${JSON.stringify(details, null, 2)}`);
     }
   }
   
@@ -346,16 +474,38 @@ class HmaClient {
   }
   
   /**
-   * Process an image through the HMA service
+   * Process a single image through HMA matching
    * @param {string} imagePath - Path to the image file
    * @param {object} metadata - Metadata about the image
    * @param {number} [attempt=1] - Current attempt number (for retries)
    * @returns {Promise<object>} The processing result
    */
   async processImage(imagePath, metadata, attempt = 1) {
-    const { author_did, photo_id } = metadata;
+    const userDid = metadata?.userDid;
+    const photoId = metadata?.photoId;
     
-    this.logger('debug', `Processing image ${photo_id} (attempt ${attempt}/${this.retryAttempts})`, null, 3);
+    if (!userDid || !photoId) {
+      this.logger('warn', `Missing metadata for image at ${imagePath}. Skipping processing.`, null, 3);
+      return {
+        matched: false,
+        matches: [],
+        action: 'none',
+        metadata: {
+          processedAt: new Date().toISOString(),
+          error: 'Missing required metadata (userDid or photoId)'
+        }
+      };
+    }
+    
+    this.logger('debug', `Processing image ${photoId} (attempt ${attempt}/${this.retryAttempts})`, {
+      apiUrl: this.apiUrl,
+      bridgeEndpoint: `${this.apiUrl}/api/v1/match`
+    }, 3);
+    
+    this.logger('debug', `Using match threshold: ${this.matchThreshold}`, {
+      matchThreshold: this.matchThreshold,
+      thresholdType: typeof this.matchThreshold
+    }, 2);
     
     try {
       if (!fs.existsSync(imagePath)) {
@@ -365,11 +515,31 @@ class HmaClient {
       // Create form data with the image
       const form = new FormData();
       form.append('image', fs.createReadStream(imagePath));
+      
+      // Set match threshold
+      this.logger('debug', `Using match threshold: ${this.matchThreshold}`, null, 3);
       form.append('threshold', this.matchThreshold.toString());
       
-      // Add metadata
-      if (author_did) form.append('author_did', author_did);
-      if (photo_id) form.append('photo_id', photo_id);
+      // Add metadata - use the bridge API expected parameter names
+      if (userDid) {
+        form.append('author_did', userDid);  // Send as author_did to bridge API
+        this.logger('debug', `Added author_did: ${userDid}`, null, 3);
+      }
+      
+      if (photoId) {
+        form.append('photo_id', photoId);    // Send as photo_id to bridge API
+        this.logger('debug', `Added photo_id: ${photoId}`, null, 3);
+      }
+      
+      // Add additional metadata as a JSON string
+      const metadataObj = {
+        userDid,
+        photoId,
+        source: 'perchpics_upload',
+        processedAt: new Date().toISOString()
+      };
+      form.append('metadata', JSON.stringify(metadataObj));
+      this.logger('debug', `Added metadata JSON object`, metadataObj, 3);
       
       // Custom app headers
       const headers = {
@@ -379,7 +549,7 @@ class HmaClient {
       
       // Call the match endpoint on the bridge
       const matchEndpoint = `${this.apiUrl}/api/v1/match`;
-      this.logger('debug', `Calling HMA match endpoint: ${matchEndpoint}`, null, 3);
+      this.logger('debug', `Calling HMA match endpoint: ${matchEndpoint}`, null, 2);
       
       const response = await this.fetch(matchEndpoint, {
         method: 'POST',
@@ -399,22 +569,58 @@ class HmaClient {
       
       const matchResult = await response.json();
       
-      // Process the result
-      if (matchResult.matched) {
-        this.logger('info', `Image ${photo_id} matched in HMA database`, {
-          matchCount: matchResult.matches ? matchResult.matches.length : 0
+      // Add detailed logging of the raw match result
+      this.logger('debug', `Raw match response:`, {
+        matchResultKeys: Object.keys(matchResult),
+        matchStatus: matchResult.status || 'no status',
+        matchSuccess: matchResult.success || false,
+        matchedFlag: matchResult.matched || false,
+        matchCount: matchResult.matches ? matchResult.matches.length : 0,
+        hash: matchResult.hash || 'no hash returned'
+      }, 3);
+      
+      // Check if there are any matches, even if matchedFlag is false
+      if (matchResult.matches && matchResult.matches.length > 0) {
+        // Force matched flag to true if we have any matches
+        matchResult.matched = true;
+        matchResult.action = 'REVIEW';
+        
+        const matchCount = matchResult.matches.length;
+        
+        // Log the match information with the format shown in the screenshot
+        this.logger('success', `Found ${matchCount} matches for image ${path.basename(imagePath)}`, {
+          matchCount,
+          filename: path.basename(imagePath),
+          firstMatch: matchResult.matches[0] || {}
         }, 2);
-      } else {
-        this.logger('debug', `Image ${photo_id} did not match any entries in HMA database`, null, 3);
+        
+        // Format matches with the exact style from the screenshot
+        this.logger('success', `SIGNIFICANT MATCH FOUND for image ${path.basename(imagePath)}`, {
+          action: 'REVIEW',
+          significantMatches: `${matchCount} out of ${matchCount} total`,
+          matchThreshold: this.matchThreshold,
+          hash: matchResult.matches[0]?.hash || ""
+        }, 1);
+      } else if (!matchResult.matched) {
+        // Use success level for consistent formatting but with NO MATCH message
+        this.logger('success', `NO MATCH FOUND for image ${path.basename(imagePath)}`, {
+          matchCount: 0,
+          filename: path.basename(imagePath),
+          matchThreshold: this.matchThreshold,
+          imageHash: matchResult.hash || 'no hash returned'
+        }, 1);
       }
       
+      // Ensure we return a properly structured result
       return {
         matched: matchResult.matched || false,
         matches: matchResult.matches || [],
+        action: matchResult.action || 'none', 
         metadata: {
-          author_did,
-          photo_id,
-          processedAt: new Date().toISOString()
+          userDid,
+          photoId,
+          processedAt: new Date().toISOString(),
+          threshold: this.matchThreshold
         }
       };
     } catch (error) {
@@ -463,18 +669,34 @@ class HmaClient {
       const batch = images.slice(i, i + concurrency);
       const batchPromises = batch.map(async (image) => {
         try {
-          const result = await this.processImage(image.path, image.metadata);
+          // Ensure we have the correct properties
+          if (!image.imagePath || !image.imageInfo) {
+            throw new Error('Invalid image object: missing imagePath or imageInfo');
+          }
+          
+          const result = await this.processImage(image.imagePath, image.imageInfo);
           results.push({
-            photo_id: image.metadata.photo_id,
-            result
+            photoId: image.imageInfo.photoId,
+            result,
+            success: true
           });
-          return result;
+          return { success: true, result, imageInfo: image.imageInfo };
         } catch (error) {
+          this.logger('error', `Error processing image in batch: ${error.message}`, { 
+            photoId: image.imageInfo?.photoId || 'unknown',
+            path: image.imagePath || 'unknown'
+          }, 1);
+          
           errors.push({
-            photo_id: image.metadata.photo_id,
-            error: error.message
+            photoId: image.imageInfo?.photoId || 'unknown',
+            error: error.message,
+            success: false
           });
-          return null;
+          return { 
+            success: false, 
+            error: error.message, 
+            imageInfo: image.imageInfo || {}
+          };
         }
       });
       
