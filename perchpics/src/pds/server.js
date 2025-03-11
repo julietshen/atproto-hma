@@ -18,7 +18,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Import PDS modules
-import { pdsConfig } from './config.js';
+import { config, updateHmaWebhookUrl } from '../config.js';
 import { createDatabase } from './database.js';
 import { setupAuthRoutes } from './auth.js';
 import { setupPhotoRoutes } from './photos.js';
@@ -26,10 +26,6 @@ import { setupWebhookRoutes } from './webhooks.js';
 import { setupModerationRoutes } from './moderation.js';
 import hmaService from '../services/hma.js';
 import { startMemoryMonitor, logMemoryUsage } from '../utils/memory-monitor.js';
-
-// Constants
-const MEMORY_CHECK_INTERVAL_MS = 60000; // 1 minute
-const MEMORY_WARNING_THRESHOLD_MB = 1024; // 1 GB
 
 /**
  * Check if a port is available
@@ -64,9 +60,16 @@ const ensureDirectories = () => {
   }
   
   // Create blobs directory if it doesn't exist
-  const blobsDir = pdsConfig.storage.directory;
+  const blobsDir = config.storage.directory;
   if (!fs.existsSync(blobsDir)) {
     fs.mkdirSync(blobsDir, { recursive: true });
+  }
+  
+  // Create logs directory if it doesn't exist
+  if (config.hma.logging.enabled && config.hma.logging.directory) {
+    if (!fs.existsSync(config.hma.logging.directory)) {
+      fs.mkdirSync(config.hma.logging.directory, { recursive: true });
+    }
   }
 };
 
@@ -75,22 +78,24 @@ const ensureDirectories = () => {
  */
 export const initPDSServer = async () => {
   try {
-    // Start memory monitor
-    const memoryMonitor = startMemoryMonitor(MEMORY_CHECK_INTERVAL_MS, MEMORY_WARNING_THRESHOLD_MB);
-    console.log('Memory monitoring enabled');
+    // Start memory monitor if enabled
+    if (config.features.memoryMonitoring) {
+      const memoryMonitor = startMemoryMonitor(
+        config.memoryMonitoring.interval, 
+        config.memoryMonitoring.warningThreshold
+      );
+      console.log('Memory monitoring enabled');
+    }
     
     // Ensure required directories exist
     ensureDirectories();
     
-    // Use the configured port directly - no fallbacks in production
-    const port = parseInt(process.env.PDS_PORT || process.env.PORT || '3002', 10);
-    const host = process.env.HOST || 'localhost';
-    
-    // Enable startup diagnostics to check health of dependent services
-    const startupDiagnostics = true;
+    // Use the configured port from the central config
+    const port = config.server.port;
+    const host = config.server.host;
     
     // Check if port is available in development mode
-    if (process.env.NODE_ENV !== 'production') {
+    if (config.env.isDevelopment) {
       const isAvailable = await isPortAvailable(port);
       if (!isAvailable) {
         console.error(`Port ${port} is already in use. Please configure a different port in your .env file.`);
@@ -99,24 +104,21 @@ export const initPDSServer = async () => {
     }
     
     // Update webhook URL based on actual port
-    const webhookUrl = pdsConfig.updateWebhookUrl(port);
+    const webhookUrl = updateHmaWebhookUrl(port);
     
-    // Run startup diagnostics
-    if (startupDiagnostics) {
-      try {
-        // Check HMA service health
-        let healthResult = await hmaService.checkHealth();
-        
-        if (healthResult.success) {
-          console.log(`HMA service health check result: ok`);
-        } else {
-          console.warn(`Warning: Unable to connect to HMA service. Image hashing may not work.`);
-          console.error(`HMA Error: ${healthResult.error.message}`);
-        }
-      } catch (error) {
+    // Check HMA service health
+    try {
+      let healthResult = await hmaService.checkHealth();
+      
+      if (healthResult.healthy) {
+        console.log(`HMA service health check result: ok`);
+      } else {
         console.warn(`Warning: Unable to connect to HMA service. Image hashing may not work.`);
-        console.error(`HMA Error: ${error.message}`);
+        console.warn(`HMA Error: ${healthResult.message}`);
       }
+    } catch (error) {
+      console.warn(`Warning: Unable to connect to HMA service. Image hashing may not work.`);
+      console.error(`HMA Error: ${error.message}`);
     }
     
     // Initialize database
@@ -126,7 +128,24 @@ export const initPDSServer = async () => {
     const app = express();
     
     // Configure middleware
-    app.use(cors(pdsConfig.cors));
+    app.use(cors({
+      origin: function(origin, callback) {
+        // In development mode, allow all origins
+        if (config.env.isDevelopment) {
+          callback(null, true);
+        } else {
+          // In production, check against the allowed origins list
+          if (!origin || config.server.corsOrigins.includes(origin)) {
+            callback(null, true);
+          } else {
+            callback(new Error('Not allowed by CORS'));
+          }
+        }
+      },
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
+      credentials: true
+    }));
     app.use(bodyParser.json());
     
     // Set up routes
@@ -135,18 +154,23 @@ export const initPDSServer = async () => {
     setupWebhookRoutes(app, db);
     setupModerationRoutes(app, db);
     
-    // Health check endpoints
+    // AT Protocol standard health endpoint
+    app.get('/xrpc/_health', (req, res) => {
+      res.json({ status: 'ok', version: '1.0.0' });
+    });
+    
+    // Additional health check endpoint
     app.get('/health', (req, res) => {
       res.json({ status: 'ok', version: '1.0.0' });
     });
     
     // Start the server
     app.listen(port, host, () => {
-      const serverUrl = `http://${host}:${port}`;
-      console.log(`PerchPics PDS running on ${serverUrl}`);
+      const serverUrl = `http://${host === '0.0.0.0' ? 'localhost' : host}:${port}`;
+      console.log(`PerchPics PDS running on http://${host}:${port}`);
       console.log(`HMA webhook configured at: ${webhookUrl}`);
       
-      if (process.env.NODE_ENV === 'production') {
+      if (config.env.isProduction) {
         console.log('Running in PRODUCTION mode');
       } else {
         console.log('Running in DEVELOPMENT mode');
