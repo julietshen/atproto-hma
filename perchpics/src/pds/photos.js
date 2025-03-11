@@ -11,6 +11,7 @@ import multer from 'multer';
 import crypto from 'crypto';
 import { pdsConfig } from './config.js';
 import { authenticateToken } from './auth.js';
+import hmaService from '../services/hma.js';
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -71,6 +72,50 @@ export function setupPhotoRoutes(app, db) {
       };
       
       const result = await db.createPhoto(did, photoData);
+      
+      // Construct the AT Protocol URI for this photo
+      const photoUri = `at://${did}/app.perchpics.photo/${result.id}`;
+      
+      // Process image with HMA - do this asynchronously without blocking the response
+      try {
+        // Create image info object for HMA
+        const imageInfo = {
+          uri: photoUri,
+          userDid: did,
+          photoId: result.id,
+          blobId: blobId
+        };
+        
+        // Process the image with HMA in the background
+        hmaService.processImage(req.file.path, imageInfo)
+          .then(hmaResult => {
+            if (hmaResult.matched) {
+              console.log(`HMA match found for image ${blobId} from user ${did}`);
+              
+              // Update the photo record with HMA result
+              db.run(
+                'UPDATE photos SET hma_checked = ?, hma_matched = ?, hma_action = ?, hma_checked_at = ? WHERE id = ?',
+                [true, true, hmaResult.action, new Date().toISOString(), result.id]
+              ).catch(err => {
+                console.error('Error updating photo with HMA results:', err);
+              });
+            } else {
+              // Update the photo record to show it was checked but no match
+              db.run(
+                'UPDATE photos SET hma_checked = ?, hma_matched = ?, hma_checked_at = ? WHERE id = ?',
+                [true, false, new Date().toISOString(), result.id]
+              ).catch(err => {
+                console.error('Error updating photo with HMA results:', err);
+              });
+            }
+          })
+          .catch(error => {
+            console.error('Error in background HMA processing:', error);
+          });
+      } catch (hmaError) {
+        // Log the error but don't fail the upload
+        console.error('Error setting up HMA processing:', hmaError);
+      }
       
       // Return the photo ID
       res.status(201).json({ id: result.id });

@@ -131,11 +131,44 @@ export async function createDatabase() {
       return photos;
     },
     
+    // Blob methods
+    getBlob: async (id) => {
+      return db.get('SELECT * FROM blobs WHERE id = ?', [id]);
+    },
+    
+    // Run raw SQL
+    run: async (sql, params = []) => {
+      return db.run(sql, params);
+    },
+    
+    // Get all rows
+    all: async (sql, params = []) => {
+      return db.all(sql, params);
+    },
+    
+    // Get moderation logs
+    getModerationLogs: async (limit = 50, offset = 0) => {
+      return db.all(
+        `SELECT ml.*, p.author_did, p.caption, p.blob_id 
+         FROM moderation_logs ml
+         JOIN photos p ON ml.photo_id = p.id
+         ORDER BY ml.created_at DESC
+         LIMIT ? OFFSET ?`,
+        [limit, offset]
+      );
+    },
+    
+    // Get moderation logs for a specific photo
+    getModerationLogsForPhoto: async (photoId) => {
+      return db.all(
+        'SELECT * FROM moderation_logs WHERE photo_id = ? ORDER BY created_at DESC',
+        [photoId]
+      );
+    },
+    
     // Raw database access
     exec: (sql, params) => db.exec(sql, params),
-    get: (sql, params) => db.get(sql, params),
-    all: (sql, params) => db.all(sql, params),
-    run: (sql, params) => db.run(sql, params)
+    get: (sql, params) => db.get(sql, params)
   };
 }
 
@@ -161,6 +194,10 @@ async function createTables(db) {
       location TEXT,
       blob_id TEXT NOT NULL,
       created_at TEXT NOT NULL,
+      hma_checked BOOLEAN DEFAULT 0,
+      hma_matched BOOLEAN DEFAULT 0,
+      hma_action TEXT,
+      hma_checked_at TEXT,
       FOREIGN KEY (author_did) REFERENCES users(did)
     )
   `);
@@ -171,6 +208,17 @@ async function createTables(db) {
       photo_id TEXT NOT NULL,
       tag TEXT NOT NULL,
       PRIMARY KEY (photo_id, tag),
+      FOREIGN KEY (photo_id) REFERENCES photos(id) ON DELETE CASCADE
+    )
+  `);
+  
+  // Moderation logs table
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS moderation_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      photo_id TEXT NOT NULL,
+      match_data TEXT NOT NULL,
+      created_at TEXT NOT NULL,
       FOREIGN KEY (photo_id) REFERENCES photos(id) ON DELETE CASCADE
     )
   `);
