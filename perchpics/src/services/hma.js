@@ -9,17 +9,20 @@ import fetch from 'node-fetch';
 import fs from 'fs';
 import path from 'path';
 import FormData from 'form-data';
+import { pdsConfig } from '../pds/config.js';
 
-// Configuration - In a production app, these would come from environment variables
+// Get configuration from the central config
 const config = {
   hma: {
-    apiUrl: process.env.HMA_API_URL || 'http://localhost:5000',
-    apiKey: process.env.HMA_API_KEY || 'test-api-key',
-    matchThreshold: process.env.HMA_MATCH_THRESHOLD || 0.8,
-    webhookUrl: process.env.HMA_WEBHOOK_URL || 'http://localhost:3001/webhooks/hma'
+    apiUrl: process.env.HMA_API_URL || pdsConfig.hma.apiUrl,
+    apiKey: process.env.HMA_API_KEY || pdsConfig.hma.apiKey,
+    matchThreshold: parseFloat(process.env.HMA_MATCH_THRESHOLD || pdsConfig.hma.matchThreshold),
+    webhookUrl: process.env.HMA_WEBHOOK_URL || pdsConfig.hma.webhookUrl,
+    retryAttempts: parseInt(process.env.HMA_RETRY_ATTEMPTS || '3'),
+    retryDelay: parseInt(process.env.HMA_RETRY_DELAY || '1000') // ms
   },
   logging: {
-    directory: process.env.HMA_LOG_DIR || './logs/hma',
+    directory: process.env.HMA_LOG_DIR || pdsConfig.hma.logDirectory,
     enabled: true
   }
 };
@@ -56,6 +59,36 @@ function logEvent(type, data) {
 }
 
 /**
+ * Helper function for retrying API calls
+ */
+async function retryFetch(apiCall, maxRetries = config.hma.retryAttempts, delay = config.hma.retryDelay) {
+  let lastError;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await apiCall();
+    } catch (error) {
+      lastError = error;
+      
+      // Log the retry attempt
+      logEvent('api_retry', { 
+        attempt: attempt + 1, 
+        maxRetries, 
+        error: error.message 
+      });
+      
+      // Wait before retrying (if not the last attempt)
+      if (attempt < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  // If we get here, all retries failed
+  throw lastError;
+}
+
+/**
  * Hash an image using the HMA service
  */
 async function hashImage(imagePath) {
@@ -63,25 +96,33 @@ async function hashImage(imagePath) {
     // Read the image file as a buffer
     const imageBuffer = fs.readFileSync(imagePath);
     
+    // Get the image MIME type
+    const mimetype = getImageMimeType(path.extname(imagePath));
+    
     // Create form data with the image
     const formData = new FormData();
     formData.append('image', imageBuffer, {
       filename: path.basename(imagePath),
-      contentType: 'image/jpeg' // Adjust based on actual image type
+      contentType: mimetype
     });
     
-    // Call the HMA hash endpoint
-    const response = await fetch(`${config.hma.apiUrl}/api/v1/hash`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${config.hma.apiKey}`
-      },
-      body: formData
+    // Call the HMA hash endpoint with retry logic
+    const response = await retryFetch(async () => {
+      const res = await fetch(`${config.hma.apiUrl}/api/v1/hash`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${config.hma.apiKey}`
+        },
+        body: formData
+      });
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`HMA hash request failed: ${res.status} ${res.statusText} - ${errorText}`);
+      }
+      
+      return res;
     });
-    
-    if (!response.ok) {
-      throw new Error(`HMA hash request failed: ${response.status} ${response.statusText}`);
-    }
     
     const hashResult = await response.json();
     logEvent('hash_success', { imagePath, hashResult });
@@ -99,21 +140,26 @@ async function hashImage(imagePath) {
  */
 async function matchHash(hashData) {
   try {
-    // Call the HMA match endpoint
-    const response = await fetch(`${config.hma.apiUrl}/api/v1/match`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.hma.apiKey}`
-      },
-      body: JSON.stringify({
-        hashes: [hashData]
-      })
+    // Call the HMA match endpoint with retry logic
+    const response = await retryFetch(async () => {
+      const res = await fetch(`${config.hma.apiUrl}/api/v1/match`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.hma.apiKey}`
+        },
+        body: JSON.stringify({
+          hashes: Array.isArray(hashData) ? hashData : [hashData]
+        })
+      });
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`HMA match request failed: ${res.status} ${res.statusText} - ${errorText}`);
+      }
+      
+      return res;
     });
-    
-    if (!response.ok) {
-      throw new Error(`HMA match request failed: ${response.status} ${response.statusText}`);
-    }
     
     const matchResult = await response.json();
     logEvent('match_success', { hashData, matchResult });
@@ -157,6 +203,24 @@ async function sendWebhookNotification(photoId, matchResult) {
 }
 
 /**
+ * Helper function to determine the MIME type based on file extension
+ */
+function getImageMimeType(extension) {
+  const ext = extension.toLowerCase();
+  switch (ext) {
+    case '.jpg':
+    case '.jpeg':
+      return 'image/jpeg';
+    case '.png':
+      return 'image/png';
+    case '.webp':
+      return 'image/webp';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
+/**
  * Process an image through the HMA pipeline
  */
 async function processImage(imagePath, imageInfo) {
@@ -175,7 +239,8 @@ async function processImage(imagePath, imageInfo) {
     const result = {
       matched: significantMatches.length > 0,
       action: significantMatches.length > 0 ? 'review' : 'none',
-      matches: significantMatches
+      matches: significantMatches,
+      hash: hashResult
     };
     
     // Log the result
@@ -205,10 +270,112 @@ async function processImage(imagePath, imageInfo) {
   }
 }
 
+/**
+ * Check if the HMA API is available and responding
+ */
+async function checkHealth() {
+  try {
+    // Call the HMA health endpoint
+    const response = await fetch(`${config.hma.apiUrl}/api/v1/health`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${config.hma.apiKey}`
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HMA health check failed: ${response.status} ${response.statusText}`);
+    }
+    
+    const healthData = await response.json();
+    logEvent('health_check_success', { healthData });
+    
+    return {
+      status: 'ok',
+      details: healthData
+    };
+  } catch (error) {
+    console.error('HMA health check error:', error);
+    logEvent('health_check_error', { error: error.message });
+    
+    return {
+      status: 'error',
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Process a batch of images through the HMA pipeline
+ * 
+ * @param {Array} images - Array of objects containing {imagePath, imageInfo}
+ * @param {Object} options - Processing options
+ * @returns {Array} Results for each image
+ */
+async function processBatch(images, options = {}) {
+  const results = [];
+  const concurrencyLimit = options.concurrency || 3;
+  
+  // Process in batches to control concurrency
+  for (let i = 0; i < images.length; i += concurrencyLimit) {
+    const batch = images.slice(i, i + concurrencyLimit);
+    
+    // Process this batch in parallel
+    const batchResults = await Promise.allSettled(
+      batch.map(item => processImage(item.imagePath, item.imageInfo))
+    );
+    
+    // Add results to the main results array
+    batchResults.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        results.push({
+          success: true,
+          imageInfo: batch[index].imageInfo,
+          result: result.value
+        });
+      } else {
+        results.push({
+          success: false,
+          imageInfo: batch[index].imageInfo,
+          error: result.reason?.message || 'Unknown error'
+        });
+      }
+    });
+    
+    // Log progress
+    const progress = Math.min(i + concurrencyLimit, images.length);
+    logEvent('batch_progress', { 
+      processed: progress,
+      total: images.length,
+      remainingItems: images.length - progress
+    });
+    
+    // If we're not at the end, add a small delay to avoid overwhelming the HMA service
+    if (i + concurrencyLimit < images.length) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  }
+  
+  // Log overall results
+  const successCount = results.filter(r => r.success).length;
+  const matchCount = results.filter(r => r.success && r.result.matched).length;
+  
+  logEvent('batch_complete', {
+    totalImages: images.length,
+    successCount,
+    errorCount: images.length - successCount,
+    matchCount
+  });
+  
+  return results;
+}
+
 export default {
   processImage,
   hashImage,
   matchHash,
   sendWebhookNotification,
-  logEvent
+  logEvent,
+  checkHealth,
+  processBatch
 }; 
