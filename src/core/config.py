@@ -4,67 +4,60 @@ AT Protocol HMA Integration - Configuration Module
 
 import os
 from typing import Optional
-from pydantic import BaseSettings, PostgresDsn, validator
 
-class Settings(BaseSettings):
+class Settings:
     """
     Application settings loaded from environment variables.
     """
-    # Database settings
-    DATABASE_URL: PostgresDsn
+    def __init__(self):
+        # Database settings
+        self.DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres@db:5432/atproto_hma")
 
-    # HMA service settings
-    HMA_API_URL: str
-    HMA_API_KEY: Optional[str] = None
+        # HMA service settings
+        self.HMA_API_URL = os.environ.get("HMA_API_URL", "http://hma:5000")
+        self.HMA_API_KEY = os.environ.get("HMA_API_KEY")
 
-    # AT Protocol settings
-    AT_PROTOCOL_PDS_URL: str
-    AT_PROTOCOL_API_KEY: Optional[str] = None
+        # AT Protocol settings
+        self.AT_PROTOCOL_PDS_URL = os.environ.get("AT_PROTOCOL_PDS_URL", "http://pds:3000")
+        self.AT_PROTOCOL_API_KEY = os.environ.get("AT_PROTOCOL_API_KEY")
 
-    # NCMEC settings
-    NCMEC_API_KEY: Optional[str] = None
-    NCMEC_ORGANIZATION_ID: Optional[str] = None
+        # NCMEC settings
+        self.NCMEC_API_KEY = os.environ.get("NCMEC_API_KEY")
+        self.NCMEC_ORGANIZATION_ID = os.environ.get("NCMEC_ORGANIZATION_ID")
 
-    # Logging settings
-    LOG_LEVEL: str = "INFO"
-    LOG_FILE: Optional[str] = None
+        # Logging settings
+        self.LOG_LEVEL = self._validate_log_level(os.environ.get("LOG_LEVEL", "INFO"))
+        self.LOG_FILE = os.environ.get("LOG_FILE")
 
-    # Service settings
-    PORT: int = 3000
-    HOST: str = "0.0.0.0"
-    WORKERS: int = 4
-    DEBUG: bool = False
+        # Service settings
+        self.PORT = int(os.environ.get("PORT", 3000))
+        self.HOST = os.environ.get("HOST", "0.0.0.0")
+        self.WORKERS = int(os.environ.get("WORKERS", 4))
+        self.DEBUG = os.environ.get("DEBUG", "").lower() in ("true", "1", "yes")
 
-    # Security settings
-    JWT_SECRET: Optional[str] = None
-    ENCRYPTION_KEY: Optional[str] = None
+        # Security settings
+        self.JWT_SECRET = os.environ.get("JWT_SECRET")
+        self.ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY")
 
-    # Feature flags
-    ENABLE_NCMEC_REPORTING: bool = True
-    ENABLE_AUDIT_LOGGING: bool = True
-    ENABLE_METRICS: bool = True
+        # Feature flags
+        self.ENABLE_NCMEC_REPORTING = os.environ.get("ENABLE_NCMEC_REPORTING", "").lower() in ("true", "1", "yes")
+        self.ENABLE_AUDIT_LOGGING = os.environ.get("ENABLE_AUDIT_LOGGING", "").lower() in ("true", "1", "yes")
+        self.ENABLE_METRICS = os.environ.get("ENABLE_METRICS", "").lower() in ("true", "1", "yes")
 
-    # Performance tuning
-    MAX_CONCURRENT_REQUESTS: int = 100
-    REQUEST_TIMEOUT_SECONDS: int = 30
-    HASH_CACHE_SIZE: int = 1000
+        # Performance tuning
+        self.MAX_CONCURRENT_REQUESTS = int(os.environ.get("MAX_CONCURRENT_REQUESTS", 100))
+        self.REQUEST_TIMEOUT_SECONDS = int(os.environ.get("REQUEST_TIMEOUT_SECONDS", 30))
+        self.HASH_CACHE_SIZE = int(os.environ.get("HASH_CACHE_SIZE", 1000))
 
-    class Config:
-        """
-        Pydantic configuration class.
-        """
-        env_file = ".env"
-        case_sensitive = True
-
-    @validator("LOG_LEVEL")
-    def validate_log_level(cls, v):
+    def _validate_log_level(self, level: str) -> str:
         """
         Validate that the log level is one of the allowed values.
         """
         allowed_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
-        if v.upper() not in allowed_levels:
+        level_upper = level.upper()
+        if level_upper not in allowed_levels:
             raise ValueError(f"Log level must be one of {allowed_levels}")
-        return v.upper()
+        return level_upper
 
 # Create settings instance
 settings = Settings() 
