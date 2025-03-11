@@ -137,12 +137,9 @@ const Upload = () => {
         setCaption('');
         setAltText('');
         
-        // Get the current user's DID
-        const userDid = perchPicsService.getCurrentUserDid();
-        
-        // Redirect to profile page after a short delay
+        // Redirect to home page after a short delay
         setTimeout(() => {
-          navigate(`/profile/${userDid}`);
+          navigate('/');
         }, 1500);
       } else {
         setError('Failed to upload photo. Please try again.');

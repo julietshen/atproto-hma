@@ -105,47 +105,99 @@ ROOST/
 
 ## Quick Start
 
-### Option 1: Running with Docker Compose (Recommended)
+### Starting the Complete System
 
-1. Clone the repositories:
-   ```
-   mkdir -p ROOST && cd ROOST
-   git clone https://github.com/your-username/atproto-hma.git
-   git clone https://github.com/your-username/perchpics.git
-   cd atproto-hma
-   ```
+The system includes three main components:
+1. The HMA service and PostgreSQL database
+2. The ATProto-HMA Bridge 
+3. The PerchPics application
 
-2. Run the integration test script:
-   ```
-   ./integration-test.sh
-   ```
+To start everything at once:
 
-This will start all services and verify they are working correctly.
-
-3. Access PerchPics at http://localhost:3000
-
-### Option 2: Running Components Separately
-
-#### 1. Start the Database and HMA services:
-
-```
+```bash
+# Clone the repositories (if you haven't already)
+mkdir -p ROOST && cd ROOST
+git clone https://github.com/your-username/atproto-hma.git
+git clone https://github.com/your-username/perchpics.git
 cd atproto-hma
-docker-compose up -d db hma
+
+# Option 1: Run the integration test script (recommended for first-time setup)
+./integration-test.sh
+
+# Option 2: Start services manually in the correct order
+# Start the database and HMA service
+docker-compose up -d db app
+
+# Start the ATProto-HMA Bridge
+docker-compose up -d atproto-hma
+
+# Start PerchPics
+cd ../perchpics
+npm install
+npm run start:clean:debug
 ```
 
-#### 2. Start the ATProto-HMA Bridge Service:
+Access PerchPics at http://localhost:3000
 
-```
+### Starting Individual Services
+
+You can start each service independently based on your development needs:
+
+#### 1. Database Service Only
+```bash
 cd atproto-hma
+docker-compose up -d db
+```
+
+#### 2. HMA Service Only
+```bash
+cd atproto-hma
+# Make sure the database is running first
+docker-compose up -d db
+# Then start HMA
+docker-compose up -d app
+```
+
+#### 3. ATProto-HMA Bridge Only
+```bash
+cd atproto-hma
+# Make sure the database and HMA are running first
+docker-compose up -d db app
+# Then start the bridge
 docker-compose up -d atproto-hma
 ```
 
-#### 3. Start PerchPics locally:
-
-```
-cd ../perchpics
+#### 4. PerchPics Only
+```bash
+cd perchpics
 npm install
-npm run start
+npm run start:clean:debug
+```
+
+Note: PerchPics can run without the HMA services, but content moderation features will be disabled.
+
+### Service Dependencies and Startup Order
+
+For proper functionality, services should be started in this order:
+1. PostgreSQL Database
+2. HMA Service 
+3. ATProto-HMA Bridge
+4. PerchPics Application
+
+### Verifying Services
+
+To verify all services are running:
+```bash
+docker-compose ps
+```
+
+To check service logs:
+```bash
+# HMA service logs
+docker-compose logs app
+
+# ATProto-HMA Bridge logs
+docker-compose logs atproto-hma
 ```
 
 ## Configuration

@@ -41,8 +41,19 @@ PerchPics integrates with Meta's Hasher-Matcher-Actioner (HMA) for content moder
    - This indirect connection ensures compatibility and proper processing
 
 3. **Configuration**:
-   - `HMA_API_URL` in `.env` should be set to `http://localhost:3001` (bridge service)
-   - Do NOT set this to `http://localhost:5000` (direct HMA connection), as requests will fail
+   - `HMA_BRIDGE_API_URL` in `.env` should be set to `http://localhost:3001` (bridge service)
+   - `HMA_SERVICE_API_URL` in `.env` should be set to `http://localhost:5000` (direct HMA service)
+   - For backward compatibility, `HMA_API_URL` is also supported but should point to the bridge
+
+### Configuration Hierarchy
+
+The HMA client in PerchPics uses a sophisticated configuration hierarchy to ensure robust operation:
+
+1. Environment variables (highest priority)
+2. Configuration settings in `config.js`
+3. Default values (lowest priority)
+
+This enables flexible deployment across different environments while maintaining sensible defaults.
 
 ### Why Use the Bridge?
 
@@ -60,7 +71,8 @@ PerchPics uses environment variables to manage ports and connections between com
 
 - `FRONTEND_PORT`: The port for the Vite frontend server (default: 3000)
 - `PDS_PORT`: The port for the PDS server (default: 3002)
-- `HMA_API_URL`: The URL for the HMA service (default: http://localhost:3001) - This should always point to the bridge, not directly to HMA
+- `HMA_BRIDGE_API_URL`: The URL for the ATProto-HMA bridge (default: http://localhost:3001)
+- `HMA_SERVICE_API_URL`: The URL for the HMA service (default: http://localhost:5000)
 
 To change these ports, edit the `.env` file in the project root. The system will:
 
@@ -71,7 +83,101 @@ To change these ports, edit the `.env` file in the project root. The system will
 For local development with Docker:
 - Ensure the ports in `.env` match the exposed ports in `docker-compose.yml`
 - The frontend will proxy API requests to the PDS server
-- The PDS server will connect to the HMA service
+- The PDS server will connect to the HMA service through the bridge
+
+## Starting the Project
+
+The ATProto-HMA project consists of several interconnected services. These can be started together or individually depending on your needs.
+
+### Starting the Complete System
+
+The complete system includes three main components:
+1. The HMA service (port 5000)
+2. The ATProto-HMA Bridge (port 3001)
+3. The PerchPics application (frontend port 3000, PDS port 3002)
+
+To start everything at once:
+
+```bash
+# Start from the project root directory
+cd /Users/jsroost/ROOST/atproto-hma
+
+# Start the Docker services (database, HMA service, and bridge)
+docker-compose up -d db app atproto-hma
+
+# Start the PerchPics application
+cd perchpics
+npm run start:clean:debug
+```
+
+### Starting Individual Services
+
+#### Starting HMA Service Only
+```bash
+cd /Users/jsroost/ROOST/atproto-hma
+docker-compose up -d db app
+```
+
+#### Starting ATProto-HMA Bridge Only
+```bash
+cd /Users/jsroost/ROOST/atproto-hma
+# Make sure the database is running first
+docker-compose up -d db
+# Then start the bridge
+docker-compose up -d atproto-hma
+```
+
+#### Starting PerchPics Without HMA
+If you want to run PerchPics without content moderation functionality:
+```bash
+cd /Users/jsroost/ROOST/atproto-hma/perchpics
+npm run start:clean:debug
+```
+Note: The application will still function, but image hashing and content moderation features will be disabled with appropriate warnings in the logs.
+
+### Service Dependencies
+
+For proper functionality, services should be started in this order:
+1. Database (PostgreSQL)
+2. HMA Service 
+3. ATProto-HMA Bridge
+4. PerchPics Application
+
+### Troubleshooting
+
+#### Connection Issues
+- **404 errors from HMA**: Ensure you're using the ATProto-HMA Bridge (port 3001) and not connecting directly to HMA (port 5000)
+- **Database connection errors**: Ensure the PostgreSQL database is running and accessible
+- **Port conflicts**: Check if the required ports are already in use by other applications
+
+#### Configuration
+- Verify that your environment variables are correctly set:
+  - `HMA_BRIDGE_API_URL` should point to the bridge service (`http://localhost:3001`)
+  - `HMA_SERVICE_API_URL` should point to the HMA service (`http://localhost:5000`)
+  - For backward compatibility, `HMA_API_URL` is also supported but should point to the bridge
+
+#### Checking Service Status
+```bash
+# Check Docker services
+docker-compose ps
+
+# Check logs for HMA service
+docker-compose logs app
+
+# Check logs for ATProto-HMA Bridge
+docker-compose logs atproto-hma
+
+# Check HMA configuration in PerchPics
+cd perchpics
+node -e "console.log(require('./src/config.js').config.hma)"
+```
+
+#### Verifying the Bridge Connection
+Use curl to check if the bridge is accessible:
+```bash
+curl -v http://localhost:3001/health
+```
+You should receive a response with `{"status":"healthy"}` if the bridge is running correctly.
 
 ## Getting Started
 

@@ -9,14 +9,14 @@ import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
 import crypto from 'crypto';
-import { pdsConfig } from './config.js';
+import { config } from '../config.js';
 import { authenticateToken } from './auth.js';
 import hmaService from '../services/hma.js';
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, pdsConfig.storage.directory);
+    cb(null, config.storage.directory);
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
@@ -28,13 +28,13 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: {
-    fileSize: pdsConfig.storage.maxSize
+    fileSize: config.storage.maxSize
   },
   fileFilter: (req, file, cb) => {
-    if (pdsConfig.storage.allowedTypes.includes(file.mimetype)) {
+    if (config.storage.allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only JPEG, PNG, and WebP images are allowed.'));
+      cb(new Error(`File type not allowed. Allowed types: ${config.storage.allowedTypes.join(', ')}`));
     }
   }
 });
@@ -211,7 +211,7 @@ export function setupPhotoRoutes(app, db) {
   app.get('/blobs/:id', (req, res) => {
     try {
       const { id } = req.params;
-      const filePath = path.join(pdsConfig.storage.directory, id);
+      const filePath = path.join(config.storage.directory, id);
       
       // Check if file exists
       if (!fs.existsSync(filePath)) {
