@@ -26,7 +26,7 @@ services:
 
   # HMA Service
   hma:
-    image: ghcr.io/facebook/hasher-matcher-actioner:latest
+    image: ghcr.io/facebook/threatexchange/hma:latest
     ports:
       - "5000:5000"
     environment:

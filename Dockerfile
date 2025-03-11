@@ -26,5 +26,5 @@ ENV PYTHONUNBUFFERED=1
 # Expose the port
 EXPOSE 3000
 
-# Run the application
-CMD ["python", "-m", "src.main"] 
+# Run the application with Gunicorn in production mode
+CMD ["gunicorn", "--bind", "0.0.0.0:3000", "--workers", "4", "src.main:app"] 
