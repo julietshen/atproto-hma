@@ -24,9 +24,6 @@ export async function createDatabase() {
   // Create tables if they don't exist
   await createTables(db);
   
-  // Create demo user if it doesn't exist
-  await createDemoUser(db);
-  
   // Return the database interface
   return {
     // User methods

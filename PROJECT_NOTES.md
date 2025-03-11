@@ -9,6 +9,43 @@ The goal of this project is to integrate [AT Protocol](https://atproto.com/) wit
 3. **PostgreSQL database**: Stores both the atproto-hma service data and HMA's data
 4. **PerchPics**: A sample AT Protocol application for testing the integration
 
+## Architecture: ATProto-HMA Bridge 
+
+### Bridge Purpose and Design
+
+The atproto-hma bridge serves as a translation layer between AT Protocol applications and HMA 2.0's content moderation services. This integration bridge is a critical component for several reasons:
+
+1. **API Translation**: 
+   - HMA 2.0 uses a unique API structure with endpoints like `/h/hash` and `/m/compare`
+   - The bridge exposes standardized REST endpoints with conventional patterns (`/api/v1/hash`, `/api/v1/match`) that are more familiar to developers
+   - This translation allows applications to use a consistent API pattern without needing to adapt to HMA's specific patterns
+
+2. **AT Protocol-Specific Integration**:
+   - The bridge handles AT Protocol-specific requirements such as blob formatting and webhook handling
+   - It provides authentication mechanisms compatible with AT Protocol security models
+   - It translates between AT Protocol's data structures and what HMA expects
+
+3. **Decoupling and Future-Proofing**:
+   - By using the bridge, applications are insulated from changes in the underlying HMA implementation
+   - If HMA's API changes in future versions, only the bridge needs to be updated, not all client applications
+   - This architecture supports better modularization and separation of concerns
+
+### Connection Flow
+
+The proper connection flow should be:
+1. AT Protocol Application → Bridge (port 3001) → HMA Service (port 5000)
+
+The bridge uses `/api/v1/...` style endpoints, which it then translates to the appropriate HMA 2.0 endpoints.
+
+### Common Issues
+
+A frequent issue is applications attempting to bypass the bridge and connect directly to HMA, which fails because:
+1. HMA 2.0 doesn't support the `/api/v1/...` endpoint pattern that applications expect
+2. Direct connections miss AT Protocol-specific handling that the bridge provides
+3. Authentication and data formatting may not be correctly managed
+
+Applications must be configured to use the bridge's URL (typically `http://localhost:3001`) rather than connecting directly to HMA (`http://localhost:5000`).
+
 ## Current Status
 
 ### What's Working

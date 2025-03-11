@@ -25,6 +25,54 @@ The app is built with simplicity in mind, following the KISS (Keep It Simple, St
 - SQLite for data storage
 - Custom AT Protocol implementation
 
+## HMA Integration Architecture
+
+PerchPics integrates with Meta's Hasher-Matcher-Actioner (HMA) for content moderation via a specialized architecture:
+
+### Bridge-Based Integration
+
+1. **Bridge Service**: 
+   - The ATProto-HMA bridge (running on port 3001) serves as a translation layer between PerchPics and HMA 2.0
+   - The bridge exposes conventional REST endpoints (`/api/v1/hash`, `/api/v1/match`) that PerchPics uses
+   - It translates these requests to HMA 2.0's specific endpoint format (`/h/hash`, `/m/compare`)
+
+2. **Connection Flow**:
+   - PerchPics → Bridge (port 3001) → HMA Service (port 5000)
+   - This indirect connection ensures compatibility and proper processing
+
+3. **Configuration**:
+   - `HMA_API_URL` in `.env` should be set to `http://localhost:3001` (bridge service)
+   - Do NOT set this to `http://localhost:5000` (direct HMA connection), as requests will fail
+
+### Why Use the Bridge?
+
+The bridge provides crucial functionality:
+- AT Protocol-specific data formatting and blob handling
+- Authentication and security integration matching AT Protocol patterns
+- Future-proofing against changes in HMA API design
+- Additional webhook handling and notification features
+
+Direct connections to HMA will fail because HMA doesn't understand the endpoint format PerchPics expects.
+
+## Port Configuration
+
+PerchPics uses environment variables to manage ports and connections between components:
+
+- `FRONTEND_PORT`: The port for the Vite frontend server (default: 3000)
+- `PDS_PORT`: The port for the PDS server (default: 3002)
+- `HMA_API_URL`: The URL for the HMA service (default: http://localhost:3001) - This should always point to the bridge, not directly to HMA
+
+To change these ports, edit the `.env` file in the project root. The system will:
+
+1. Use exactly the ports specified - no automatic fallbacks
+2. Fail with a clear error message if a port is already in use
+3. Automatically configure connections between components based on these settings
+
+For local development with Docker:
+- Ensure the ports in `.env` match the exposed ports in `docker-compose.yml`
+- The frontend will proxy API requests to the PDS server
+- The PDS server will connect to the HMA service
+
 ## Getting Started
 
 ### Prerequisites

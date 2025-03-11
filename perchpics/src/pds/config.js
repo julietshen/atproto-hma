@@ -30,13 +30,25 @@ class PDSConfig {
     // Server settings
     this.server = {
       host: process.env.HOST || 'localhost',
-      port: parseInt(process.env.PORT || '3001', 10),
-      portFallbacks: [3001, 3002, 3003, 3004, 3005]
+      port: parseInt(process.env.PDS_PORT || process.env.PORT || '3002', 10)
     };
     
     // CORS settings
     this.cors = {
-      origin: (process.env.CORS_ORIGINS || 'http://localhost:3000,http://localhost:3001,http://localhost:3002').split(','),
+      origin: function(origin, callback) {
+        // In development mode, allow all origins
+        if (process.env.NODE_ENV !== 'production') {
+          callback(null, true);
+        } else {
+          // In production, check against the allowed origins list
+          const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3000').split(',');
+          if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+          } else {
+            callback(new Error('Not allowed by CORS'));
+          }
+        }
+      },
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
       exposedHeaders: ['Content-Length', 'Content-Type'],
@@ -63,7 +75,7 @@ class PDSConfig {
     
     // HMA settings
     this.hma = {
-      apiUrl: process.env.HMA_API_URL || 'http://localhost:5000',
+      apiUrl: process.env.HMA_API_URL || 'http://localhost:3001',
       apiKey: process.env.HMA_API_KEY || 'your-hma-api-key',
       matchThreshold: parseFloat(process.env.HMA_MATCH_THRESHOLD || '0.8'),
       logDirectory: process.env.HMA_LOG_DIR || './logs/hma',
@@ -76,17 +88,8 @@ class PDSConfig {
    * @param {number} actualPort - The port the server is actually running on
    */
   updateWebhookUrl(actualPort) {
-    // Generate default webhook URL with the actual port
-    const configuredPort = this.server.port;
-    const defaultUrl = `http://${this.server.host}:${actualPort}/webhooks/hma`;
-    
-    // If there's no explicit webhook URL or it contains the configured port, update it
-    if (!process.env.HMA_WEBHOOK_URL || process.env.HMA_WEBHOOK_URL.includes(`:${configuredPort}/`)) {
-      this.hma.webhookUrl = defaultUrl;
-    } else {
-      this.hma.webhookUrl = process.env.HMA_WEBHOOK_URL;
-    }
-    
+    const host = process.env.HOST || 'localhost';
+    this.hma.webhookUrl = `http://${host}:${actualPort}/webhooks/hma`;
     return this.hma.webhookUrl;
   }
 }

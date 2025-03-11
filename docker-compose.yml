@@ -34,18 +34,26 @@ services:
       - 5432:5432
     environment:
       <<: *postgres-variables
-      POSTGRES_MULTIPLE_DATABASES: media_match
+      POSTGRES_MULTIPLE_DATABASES: media_match,atproto_hma
     networks:
       - backend
 
-  # perchpics service
+  # ATProto-HMA Bridge service
   atproto-hma:
     build:
-      context: ./perchpics
+      context: .
     ports:
       - "3001:3000"
+    environment:
+      DATABASE_URL: postgresql://media_match:hunter2@db:5432/atproto_hma
+      HMA_API_URL: http://app:5000
+      HMA_API_KEY: dev_key
+      LOG_LEVEL: INFO
+      PORT: 3000
+      HOST: 0.0.0.0
     depends_on:
       - app
+      - db
     networks:
       - backend
 

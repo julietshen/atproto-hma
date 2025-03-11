@@ -5,30 +5,37 @@
  * It provides a single source of truth for configuration values.
  */
 
+// Helper to get an environment variable with fallback
+const getEnv = (key: string, fallback: string): string => 
+  typeof process !== 'undefined' && process.env && process.env[key] ? process.env[key]! : fallback;
+
 // Environment-specific configuration
 const env = {
   development: {
     api: {
-      pdsUrl: 'http://localhost:3001',
+      pdsUrl: 'http://localhost:3000',
+      hmaUrl: 'http://localhost:3001',
       timeout: 30000,
     },
   },
   production: {
     api: {
-      pdsUrl: process.env.PDS_URL || 'http://localhost:3001',
-      timeout: 30000,
+      pdsUrl: getEnv('PDS_URL', 'http://localhost:3000'),
+      hmaUrl: getEnv('HMA_URL', 'http://localhost:3001'),
+      timeout: parseInt(getEnv('API_TIMEOUT', '30000')),
     },
   },
 };
 
 // Determine current environment
-const currentEnv = process.env.NODE_ENV === 'production' ? 'production' : 'development';
+const currentEnv = getEnv('NODE_ENV', 'development') === 'production' ? 'production' : 'development';
 
 // Application configuration
 export const config = {
   // API configuration
   api: {
     pdsUrl: env[currentEnv].api.pdsUrl,
+    hmaUrl: env[currentEnv].api.hmaUrl,
     timeout: env[currentEnv].api.timeout,
   },
   
@@ -40,14 +47,14 @@ export const config = {
   
   // Upload configuration
   upload: {
-    maxFileSize: 5 * 1024 * 1024, // 5MB
-    allowedTypes: ['image/jpeg', 'image/png', 'image/webp'],
+    maxFileSize: parseInt(getEnv('MAX_FILE_SIZE', (5 * 1024 * 1024).toString())), // 5MB default
+    allowedTypes: getEnv('ALLOWED_FILE_TYPES', 'image/jpeg,image/png,image/webp').split(','),
   },
   
   // Feature flags
   features: {
-    optimisticUpdates: true,
-    firehoseEnabled: true,
+    optimisticUpdates: getEnv('FEATURE_OPTIMISTIC_UPDATES', 'true') === 'true',
+    firehoseEnabled: getEnv('FEATURE_FIREHOSE', 'true') === 'true',
   },
 };
 
