@@ -229,16 +229,16 @@ export function setupModerationRoutes(app, db) {
       
       // Process the batch in the background
       hmaService.processBatch(imagesToProcess, { concurrency })
-        .then(results => {
-          console.log(`Batch ${batchId} completed: ${results.length} photos processed`);
+        .then(batchResult => {
+          console.log(`Batch ${batchId} completed: ${batchResult.succeeded} photos processed, ${batchResult.failed} failed`);
           
           // Update the database with results
-          const updatePromises = results.map(item => {
+          const updatePromises = batchResult.results.map(item => {
             if (!item.success) {
-              console.error(`Error processing photo ${item.imageInfo.photoId}:`, item.error);
+              console.error(`Error processing photo ${item.photoId}:`, item.error);
               return db.run(
                 'UPDATE photos SET hma_checked = ?, hma_checked_at = ? WHERE id = ?',
-                [true, new Date().toISOString(), item.imageInfo.photoId]
+                [true, new Date().toISOString(), item.photoId]
               );
             }
             
@@ -252,7 +252,7 @@ export function setupModerationRoutes(app, db) {
                 result.matched ? 1 : 0, 
                 result.action || 'none', 
                 new Date().toISOString(), 
-                item.imageInfo.photoId
+                item.photoId
               ]
             );
             
@@ -261,7 +261,7 @@ export function setupModerationRoutes(app, db) {
               return updatePromise.then(() => 
                 db.run(
                   'INSERT INTO moderation_logs (photo_id, match_data, created_at) VALUES (?, ?, ?)',
-                  [item.imageInfo.photoId, JSON.stringify(result), new Date().toISOString()]
+                  [item.photoId, JSON.stringify(result), new Date().toISOString()]
                 )
               );
             }

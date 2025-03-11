@@ -89,13 +89,14 @@ export function setupPhotoRoutes(app, db) {
         // Process the image with HMA in the background
         hmaService.processImage(req.file.path, imageInfo)
           .then(hmaResult => {
-            if (hmaResult.matched) {
+            // Safely handle the result, ensuring it exists and has expected properties
+            if (hmaResult && hmaResult.matched) {
               console.log(`HMA match found for image ${blobId} from user ${did}`);
               
               // Update the photo record with HMA result
               db.run(
                 'UPDATE photos SET hma_checked = ?, hma_matched = ?, hma_action = ?, hma_checked_at = ? WHERE id = ?',
-                [true, true, hmaResult.action, new Date().toISOString(), result.id]
+                [true, true, hmaResult.action || 'none', new Date().toISOString(), result.id]
               ).catch(err => {
                 console.error('Error updating photo with HMA results:', err);
               });
@@ -105,38 +106,27 @@ export function setupPhotoRoutes(app, db) {
                 'INSERT INTO moderation_logs (photo_id, match_data, created_at) VALUES (?, ?, ?)',
                 [result.id, JSON.stringify(hmaResult), new Date().toISOString()]
               ).catch(err => {
-                console.error('Error storing HMA match data in moderation logs:', err);
+                console.error('Error logging HMA match:', err);
               });
             } else {
-              // Update the photo record to show it was checked but no match
+              // No match or invalid result, still mark as checked
               db.run(
-                'UPDATE photos SET hma_checked = ?, hma_matched = ?, hma_checked_at = ? WHERE id = ?',
-                [true, false, new Date().toISOString(), result.id]
+                'UPDATE photos SET hma_checked = ?, hma_checked_at = ? WHERE id = ?',
+                [true, new Date().toISOString(), result.id]
               ).catch(err => {
-                console.error('Error updating photo with HMA results:', err);
+                console.error('Error updating photo HMA check status:', err);
               });
             }
           })
           .catch(error => {
             console.error('Error in background HMA processing:', error);
             
-            // Even on error, mark the image as checked to prevent endless retry loops
+            // Mark as checked but failed
             db.run(
-              'UPDATE photos SET hma_checked = ?, hma_checked_at = ? WHERE id = ?',
-              [true, new Date().toISOString(), result.id]
+              'UPDATE photos SET hma_checked = ?, hma_error = ?, hma_checked_at = ? WHERE id = ?',
+              [true, error.message, new Date().toISOString(), result.id]
             ).catch(err => {
-              console.error('Error updating photo after HMA processing error:', err);
-            });
-            
-            // Log the error
-            const errorMessage = error.message || 'Unknown error';
-            
-            // Log the error to the moderation logs for later review
-            db.run(
-              'INSERT INTO moderation_logs (photo_id, match_data, created_at) VALUES (?, ?, ?)',
-              [result.id, JSON.stringify({ error: errorMessage, type: 'hma_processing_error' }), new Date().toISOString()]
-            ).catch(err => {
-              console.error('Error storing HMA error in moderation logs:', err);
+              console.error('Error updating photo with HMA error:', err);
             });
           });
       } catch (hmaError) {
