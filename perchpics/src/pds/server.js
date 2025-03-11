@@ -21,6 +21,8 @@ import { pdsConfig } from './config.js';
 import { createDatabase } from './database.js';
 import { setupAuthRoutes } from './auth.js';
 import { setupPhotoRoutes } from './photos.js';
+import { setupWebhookRoutes } from './webhooks.js';
+import { setupModerationRoutes } from './moderation.js';
 
 // Create directories if they don't exist
 const ensureDirectories = () => {
@@ -54,6 +56,8 @@ export const initPDSServer = async () => {
   // Set up routes
   setupAuthRoutes(app, db);
   setupPhotoRoutes(app, db);
+  setupWebhookRoutes(app, db);
+  setupModerationRoutes(app, db);
   
   // Original health check endpoint
   app.get('/health', (req, res) => {
