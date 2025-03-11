@@ -5,8 +5,9 @@
  * including authentication, posting, and retrieving data.
  */
 
-// API base URL for our custom PDS
-const PDS_URL = 'http://localhost:3001';
+// For development, we'll use relative URLs which will be handled by the Vite dev server proxy
+// In production, we can use the full URL from the environment
+const PDS_URL = '';  // Empty string means use relative URLs, which will be proxied
 
 /**
  * Custom AT Protocol service for PerchPics
@@ -168,19 +169,30 @@ class PerchPicsService {
         formData.append('altText', altText);
       }
 
+      console.log(`Uploading to ${PDS_URL}/photos with token: ${this.token?.substring(0, 10)}...`);
+
       const response = await fetch(`${PDS_URL}/photos`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.token}`
         },
         body: formData,
-        credentials: 'include',
-        mode: 'cors'
+        credentials: 'include'
       });
 
+      console.log('Upload response status:', response.status);
+      
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errorData.error || `Upload failed: ${response.status}`);
+        const errorText = await response.text();
+        let errorMessage;
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.error || `Upload failed: ${response.status}`;
+        } catch (e) {
+          errorMessage = `Upload failed: ${response.status}. Response: ${errorText}`;
+        }
+        console.error('Upload error:', errorMessage);
+        throw new Error(errorMessage);
       }
 
       return await response.json();

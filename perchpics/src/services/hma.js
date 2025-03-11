@@ -14,12 +14,14 @@ import { pdsConfig } from '../pds/config.js';
 // Get configuration from the central config
 const config = {
   hma: {
-    apiUrl: process.env.HMA_API_URL || pdsConfig.hma.apiUrl,
+    // Use the atproto-hma bridge instead of direct HMA service
+    apiUrl: process.env.HMA_API_URL || 'http://localhost:3001',
     apiKey: process.env.HMA_API_KEY || pdsConfig.hma.apiKey,
     matchThreshold: parseFloat(process.env.HMA_MATCH_THRESHOLD || pdsConfig.hma.matchThreshold),
     webhookUrl: process.env.HMA_WEBHOOK_URL || pdsConfig.hma.webhookUrl,
     retryAttempts: parseInt(process.env.HMA_RETRY_ATTEMPTS || '3'),
-    retryDelay: parseInt(process.env.HMA_RETRY_DELAY || '1000') // ms
+    retryDelay: parseInt(process.env.HMA_RETRY_DELAY || '1000'), // ms
+    timeout: parseInt(process.env.HMA_TIMEOUT || '5000') // ms
   },
   logging: {
     directory: process.env.HMA_LOG_DIR || pdsConfig.hma.logDirectory,
@@ -90,25 +92,33 @@ async function retryFetch(apiCall, maxRetries = config.hma.retryAttempts, delay 
 
 /**
  * Hash an image using the HMA service
+ * @param {string} imagePath - Path to the image file
+ * @returns {Promise<Object>} - Hash data returned by HMA
  */
 async function hashImage(imagePath) {
   try {
-    // Read the image file as a buffer
-    const imageBuffer = fs.readFileSync(imagePath);
+    logEvent('hash_image_request', { imagePath });
     
-    // Get the image MIME type
-    const mimetype = getImageMimeType(path.extname(imagePath));
-    
-    // Create form data with the image
+    // Create form data with image
     const formData = new FormData();
-    formData.append('image', imageBuffer, {
+    const fileStats = fs.statSync(imagePath);
+    const fileStream = fs.createReadStream(imagePath);
+    
+    // Get file extension and MIME type
+    const fileExt = path.extname(imagePath).slice(1).toLowerCase();
+    const mimeType = getImageMimeType(fileExt);
+    
+    formData.append('image', fileStream, {
       filename: path.basename(imagePath),
-      contentType: mimetype
+      contentType: mimeType,
+      knownLength: fileStats.size
     });
     
-    // Call the HMA hash endpoint with retry logic
-    const response = await retryFetch(async () => {
-      const res = await fetch(`${config.hma.apiUrl}/api/v1/hash`, {
+    // Call the HMA hash endpoint via the bridge
+    const result = await retryFetch(async () => {
+      console.log(`Sending hash request to ${config.hma.apiUrl}/api/v1/hash`);
+      
+      const response = await fetch(`${config.hma.apiUrl}/api/v1/hash`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${config.hma.apiKey}`
@@ -116,58 +126,58 @@ async function hashImage(imagePath) {
         body: formData
       });
       
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`HMA hash request failed: ${res.status} ${res.statusText} - ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HMA hash request failed: ${response.status} ${response.statusText} - ${errorText}`);
       }
       
-      return res;
+      return response.json();
     });
     
-    const hashResult = await response.json();
-    logEvent('hash_success', { imagePath, hashResult });
-    
-    return hashResult;
+    logEvent('hash_image_response', { result });
+    return result;
   } catch (error) {
+    logEvent('hash_image_error', { error: error.message });
     console.error('Error hashing image:', error);
-    logEvent('hash_error', { imagePath, error: error.message });
     throw error;
   }
 }
 
 /**
- * Match hashes against the HMA database
+ * Match a hash against the HMA database
+ * @param {Object} hashData - The hash data to match
+ * @returns {Promise<Object>} - Match result from HMA
  */
 async function matchHash(hashData) {
   try {
-    // Call the HMA match endpoint with retry logic
-    const response = await retryFetch(async () => {
-      const res = await fetch(`${config.hma.apiUrl}/api/v1/match`, {
+    logEvent('match_hash_request', { hashData });
+    
+    // Call the HMA match endpoint via the bridge
+    const result = await retryFetch(async () => {
+      console.log(`Sending match request to ${config.hma.apiUrl}/api/v1/match`);
+      
+      const response = await fetch(`${config.hma.apiUrl}/api/v1/match`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${config.hma.apiKey}`
         },
-        body: JSON.stringify({
-          hashes: Array.isArray(hashData) ? hashData : [hashData]
-        })
+        body: JSON.stringify(hashData)
       });
       
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`HMA match request failed: ${res.status} ${res.statusText} - ${errorText}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`HMA match request failed: ${response.status} ${response.statusText} - ${errorText}`);
       }
       
-      return res;
+      return response.json();
     });
     
-    const matchResult = await response.json();
-    logEvent('match_success', { hashData, matchResult });
-    
-    return matchResult;
+    logEvent('match_hash_response', { result });
+    return result;
   } catch (error) {
+    logEvent('match_hash_error', { error: error.message });
     console.error('Error matching hash:', error);
-    logEvent('match_error', { hashData, error: error.message });
     throw error;
   }
 }
@@ -272,37 +282,72 @@ async function processImage(imagePath, imageInfo) {
 
 /**
  * Check if the HMA API is available and responding
+ *
+ * IMPORTANT: This function should ONLY connect to the ATProto-HMA bridge service,
+ * not directly to HMA 2.0. HMA 2.0 uses a different API structure (/h/hash, /m/compare)
+ * that is incompatible with our application. The bridge translates between the
+ * conventional REST API format our app expects (/api/v1/hash) and HMA's format.
  */
 async function checkHealth() {
-  try {
-    // Call the HMA health endpoint
-    const response = await fetch(`${config.hma.apiUrl}/api/v1/health`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${config.hma.apiKey}`
+  const serviceEndpoints = [
+    // Only use the configured bridge URL
+    { host: config.hma.apiUrl, paths: ['/', '/health', '/api/v1/health'] },
+  ];
+
+  console.log('Performing HMA health check...');
+  
+  for (const service of serviceEndpoints) {
+    for (const path of service.paths) {
+      const url = `${service.host}${path}`;
+      try {
+        console.log(`Trying HMA health check at ${url}`);
+        
+        // Setup timeout promise
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error(`Timeout of ${config.hma.timeout}ms exceeded`)), config.hma.timeout);
+        });
+        
+        // Make the request with timeout
+        const response = await Promise.race([
+          fetch(url, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json, text/plain, */*',
+            },
+          }),
+          timeoutPromise
+        ]);
+        
+        // For each attempt we need to create a fresh copy of the response
+        // to avoid "body used already" errors
+        const clonedResponse = response.clone();
+        
+        if (response.ok) {
+          try {
+            // Try to parse as JSON first
+            const data = await response.json();
+            console.log(`HMA health check succeeded at ${url}`);
+            return { success: true, endpoint: path, healthData: data };
+          } catch (e) {
+            // If JSON parsing fails, try text
+            const text = await clonedResponse.text();
+            if (text) {
+              console.log(`HMA health check succeeded at ${url}`);
+              return { success: true, endpoint: path, healthData: { status: 'ok', note: 'Using root endpoint as health check' } };
+            }
+          }
+        }
+      } catch (error) {
+        console.log(`HMA health check error at ${url}: ${error.message}`);
+        // Continue to next endpoint on failure
       }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HMA health check failed: ${response.status} ${response.statusText}`);
     }
-    
-    const healthData = await response.json();
-    logEvent('health_check_success', { healthData });
-    
-    return {
-      status: 'ok',
-      details: healthData
-    };
-  } catch (error) {
-    console.error('HMA health check error:', error);
-    logEvent('health_check_error', { error: error.message });
-    
-    return {
-      status: 'error',
-      error: error.message
-    };
   }
+  
+  // If we've exhausted all endpoints and services, return failure
+  const error = new Error('Failed to connect to HMA service after trying all endpoints');
+  console.log(`HMA health check failed: ${error.message}`);
+  return { success: false, error };
 }
 
 /**

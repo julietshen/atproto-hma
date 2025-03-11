@@ -1,21 +1,42 @@
+# Build stage
+FROM node:20-alpine as build
+
+WORKDIR /app
+
+# Copy package files and install dependencies
+COPY package*.json ./
+RUN npm ci
+
+# Copy app source
+COPY . .
+
+# Build the frontend
+RUN npm run build
+
+# Production stage
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files and install production dependencies
 COPY package*.json ./
-
-# Install dependencies
-RUN npm install
-
-# Copy the rest of the application
-COPY . .
+RUN npm ci --only=production
 
 # Create necessary directories
-RUN mkdir -p data/blobs logs/hma
+RUN mkdir -p /app/data/blobs /app/logs/hma
 
-# Expose port 3001
-EXPOSE 3001
+# Copy built assets from build stage
+COPY --from=build /app/dist /app/dist
+COPY --from=build /app/src/pds /app/src/pds
+COPY --from=build /app/src/services /app/src/services
 
-# Start the application with a custom command to run both processes properly
-CMD ["sh", "-c", "node --experimental-json-modules src/pds/server.js"] 
+# Set environment variables
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOST=0.0.0.0
+
+# Expose ports
+EXPOSE 3000
+
+# Start the PDS server
+CMD ["node", "src/pds/server.js"] 

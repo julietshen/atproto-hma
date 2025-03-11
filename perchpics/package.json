@@ -8,7 +8,7 @@
     "preview": "vite preview",
     "pds": "node src/pds/server.js",
     "start": "npm run dev & npm run pds",
-    "start:clean": "node -e \"try { require('child_process').execSync('lsof -ti:3000,3001 | xargs kill -9 2>/dev/null || true') } catch(e) {}\" && npm run start",
+    "start:clean": "node -e \"try { require('child_process').execSync('lsof -ti:$(grep FRONTEND_PORT .env | cut -d= -f2),$(grep PDS_PORT .env | cut -d= -f2) | xargs kill -9 2>/dev/null || true') } catch(e) {}\" && npm run start",
     "clean": "rimraf dist",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -59,9 +59,27 @@ def hash_image():
     Hash an image using HMA service.
     """
     try:
-        # Forward request to HMA service
-        response = requests.post(f"{HMA_API_URL}/v2/hash/lookup", json=request.json)
-        result = response.json()
+        # Forward request to HMA service - updated to use the correct endpoint
+        response = requests.post(f"{HMA_API_URL}/h/hash", json=request.json)
+        
+        # Check if we got a proper response
+        if response.status_code == 404:
+            logger.warning(f"HMA endpoint /h/hash returned 404, trying alternative endpoint")
+            # Try multipart/form-data approach if needed
+            files = {}
+            data = request.json
+            
+            # If image is base64 encoded in the request, decode it and add as file
+            if 'image_data' in data:
+                import base64
+                from io import BytesIO
+                
+                image_data = base64.b64decode(data['image_data'])
+                files = {'file': ('image.jpg', BytesIO(image_data), 'image/jpeg')}
+                
+                response = requests.post(f"{HMA_API_URL}/h/hash", files=files)
+        
+        result = response.json() if response.headers.get('content-type', '').startswith('application/json') else {"error": "Non-JSON response from HMA"}
         
         # Log the event if author_did and photo_id are provided
         data = request.json
@@ -87,12 +105,20 @@ def hash_image_url():
     Hash an image from a URL using HMA service.
     """
     try:
-        # Forward request to HMA service
-        response = requests.post(f"{HMA_API_URL}/v2/hash/url", json=request.json)
-        result = response.json()
+        # Forward request to HMA service - using a form-based approach
+        data = request.json
+        
+        if 'url' in data:
+            # Use form data with URL parameter
+            form_data = {'url': data['url']}
+            response = requests.post(f"{HMA_API_URL}/h/hash", data=form_data)
+        else:
+            # Fall back to JSON
+            response = requests.post(f"{HMA_API_URL}/h/hash", json=data)
+        
+        result = response.json() if response.headers.get('content-type', '').startswith('application/json') else {"error": "Non-JSON response from HMA"}
         
         # Log the event if author_did and photo_id are provided
-        data = request.json
         if 'author_did' in data and 'photo_id' in data:
             log_moderation_event(
                 photo_id=data['photo_id'],
@@ -115,9 +141,9 @@ def match_hash():
     Match a hash against the HMA database.
     """
     try:
-        # Forward request to HMA service
-        response = requests.post(f"{HMA_API_URL}/v2/match", json=request.json)
-        result = response.json()
+        # Forward request to HMA service - updated to use the correct endpoint
+        response = requests.post(f"{HMA_API_URL}/m/compare", json=request.json)
+        result = response.json() if response.headers.get('content-type', '').startswith('application/json') else {"error": "Non-JSON response from HMA"}
         
         # Log the event if author_did and photo_id are provided
         data = request.json

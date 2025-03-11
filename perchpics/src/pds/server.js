@@ -28,8 +28,8 @@ import hmaService from '../services/hma.js';
 
 /**
  * Check if a port is available
- * @param {number} port - Port to check
- * @returns {Promise<boolean>} - True if available, false if not
+ * @param {number} port - The port to check
+ * @returns {Promise<boolean>} True if the port is available
  */
 const isPortAvailable = async (port) => {
   return new Promise((resolve) => {
@@ -49,34 +49,19 @@ const isPortAvailable = async (port) => {
 };
 
 /**
- * Find an available port from the list of ports
- * @param {number[]} ports - List of ports to try
- * @returns {Promise<number>} - First available port found, or null if none available
- */
-const findAvailablePort = async (ports) => {
-  for (const port of ports) {
-    if (await isPortAvailable(port)) {
-      return port;
-    }
-    console.log(`Port ${port} is unavailable, trying next option...`);
-  }
-  return null; // No available ports found
-};
-
-/**
  * Ensure required directories exist
  */
 const ensureDirectories = () => {
-  const dirs = [
-    path.dirname(pdsConfig.db.location),
-    pdsConfig.storage.directory,
-    pdsConfig.hma.logDirectory
-  ];
+  // Create data directory if it doesn't exist
+  const dataDir = path.join(__dirname, '../../data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
   
-  for (const dir of dirs) {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
+  // Create blobs directory if it doesn't exist
+  const blobsDir = pdsConfig.storage.directory;
+  if (!fs.existsSync(blobsDir)) {
+    fs.mkdirSync(blobsDir, { recursive: true });
   }
 };
 
@@ -84,78 +69,80 @@ const ensureDirectories = () => {
  * Initialize the PDS server
  */
 export const initPDSServer = async () => {
-  // Ensure required directories exist
-  ensureDirectories();
-  
-  // Initialize database
-  const db = await createDatabase();
-  
-  // Create Express app
-  const app = express();
-  
-  // Configure middleware
-  app.use(cors(pdsConfig.cors));
-  app.use(bodyParser.json());
-  
-  // Set up routes
-  setupAuthRoutes(app, db);
-  setupPhotoRoutes(app, db);
-  setupWebhookRoutes(app, db);
-  setupModerationRoutes(app, db);
-  
-  // Health check endpoints
-  app.get('/health', (req, res) => {
-    res.json({ status: 'ok', version: '1.0.0' });
-  });
-  
-  app.get('/health/hma', async (req, res) => {
-    const hmaHealth = await hmaService.checkHealth();
-    
-    if (hmaHealth.status === 'ok') {
-      res.json({ 
-        status: 'ok',
-        hma: hmaHealth.details,
-        message: 'HMA service is available and responding'
-      });
-    } else {
-      res.status(503).json({
-        status: 'error',
-        message: 'HMA service is not available',
-        error: hmaHealth.error
-      });
-    }
-  });
-  
-  // AT Protocol standard health endpoint
-  app.get('/xrpc/_health', (req, res) => {
-    res.json({ status: 'ok', version: '1.0.0' });
-  });
-  
   try {
-    // Create a list of ports to try, starting with the configured port
-    const portsToTry = [
-      pdsConfig.server.port,
-      ...pdsConfig.server.portFallbacks.filter(p => p !== pdsConfig.server.port)
-    ];
+    // Ensure required directories exist
+    ensureDirectories();
     
-    // Find an available port
-    const availablePort = await findAvailablePort(portsToTry);
+    // Use the configured port directly - no fallbacks in production
+    const port = parseInt(process.env.PDS_PORT || process.env.PORT || '3002', 10);
+    const host = process.env.HOST || 'localhost';
     
-    if (!availablePort) {
-      throw new Error('Could not find an available port. Please free up a port or specify a different port range.');
+    // Enable startup diagnostics to check health of dependent services
+    const startupDiagnostics = true;
+    
+    // Check if port is available in development mode
+    if (process.env.NODE_ENV !== 'production') {
+      const isAvailable = await isPortAvailable(port);
+      if (!isAvailable) {
+        console.error(`Port ${port} is already in use. Please configure a different port in your .env file.`);
+        throw new Error(`Port ${port} is already in use`);
+      }
     }
     
-    // Update webhook URL if needed
-    const webhookUrl = pdsConfig.updateWebhookUrl(availablePort);
-    process.env.HMA_WEBHOOK_URL = webhookUrl;
+    // Update webhook URL based on actual port
+    const webhookUrl = pdsConfig.updateWebhookUrl(port);
     
-    // Start the server
-    const server = app.listen(availablePort, () => {
-      console.log(`PerchPics PDS running on http://${pdsConfig.server.host}:${availablePort}`);
-      console.log(`HMA webhook configured at: ${webhookUrl}`);
+    // Run startup diagnostics
+    if (startupDiagnostics) {
+      try {
+        // Check HMA service health
+        let healthResult = await hmaService.checkHealth();
+        
+        if (healthResult.success) {
+          console.log(`HMA service health check result: ok`);
+        } else {
+          console.warn(`Warning: Unable to connect to HMA service. Image hashing may not work.`);
+          console.error(`HMA Error: ${healthResult.error.message}`);
+        }
+      } catch (error) {
+        console.warn(`Warning: Unable to connect to HMA service. Image hashing may not work.`);
+        console.error(`HMA Error: ${error.message}`);
+      }
+    }
+    
+    // Initialize database
+    const db = await createDatabase();
+    
+    // Create Express app
+    const app = express();
+    
+    // Configure middleware
+    app.use(cors(pdsConfig.cors));
+    app.use(bodyParser.json());
+    
+    // Set up routes
+    setupAuthRoutes(app, db);
+    setupPhotoRoutes(app, db);
+    setupWebhookRoutes(app, db);
+    setupModerationRoutes(app, db);
+    
+    // Health check endpoints
+    app.get('/health', (req, res) => {
+      res.json({ status: 'ok', version: '1.0.0' });
     });
     
-    return { app, server, db };
+    // Start the server
+    app.listen(port, host, () => {
+      const serverUrl = `http://${host}:${port}`;
+      console.log(`PerchPics PDS running on ${serverUrl}`);
+      console.log(`HMA webhook configured at: ${webhookUrl}`);
+      
+      if (process.env.NODE_ENV === 'production') {
+        console.log('Running in PRODUCTION mode');
+      } else {
+        console.log('Running in DEVELOPMENT mode');
+      }
+    });
   } catch (error) {
     console.error('Failed to start PDS server:', error);
     throw error;
