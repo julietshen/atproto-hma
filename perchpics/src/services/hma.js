@@ -10,12 +10,17 @@ import fs from 'fs';
 import path from 'path';
 import FormData from 'form-data';
 import { pdsConfig } from '../pds/config.js';
+import { EventEmitter } from 'events';
+
+// Increase max listeners for FormData to prevent memory leak warning
+EventEmitter.defaultMaxListeners = 20;
 
 // Get configuration from the central config
 const config = {
   hma: {
     // Use the atproto-hma bridge instead of direct HMA service
-    apiUrl: process.env.HMA_API_URL || 'http://localhost:3001',
+    // IMPORTANT: Hardcoding bridge URL to ensure correct connection
+    apiUrl: 'http://localhost:3001', // Hardcoded to avoid environment variable issues
     apiKey: process.env.HMA_API_KEY || pdsConfig.hma.apiKey,
     matchThreshold: parseFloat(process.env.HMA_MATCH_THRESHOLD || pdsConfig.hma.matchThreshold),
     webhookUrl: process.env.HMA_WEBHOOK_URL || pdsConfig.hma.webhookUrl,
@@ -28,6 +33,10 @@ const config = {
     enabled: true
   }
 };
+
+// Log configuration details
+console.log(`HMA service configured with API URL: ${config.hma.apiUrl}`);
+console.log(`Environment HMA_API_URL: ${process.env.HMA_API_URL} (ignored, using hardcoded bridge URL)`);
 
 // Ensure log directory exists
 if (config.logging.enabled) {
@@ -96,13 +105,15 @@ async function retryFetch(apiCall, maxRetries = config.hma.retryAttempts, delay 
  * @returns {Promise<Object>} - Hash data returned by HMA
  */
 async function hashImage(imagePath) {
+  let fileStream = null;
+  
   try {
     logEvent('hash_image_request', { imagePath });
     
     // Create form data with image
     const formData = new FormData();
     const fileStats = fs.statSync(imagePath);
-    const fileStream = fs.createReadStream(imagePath);
+    fileStream = fs.createReadStream(imagePath);
     
     // Get file extension and MIME type
     const fileExt = path.extname(imagePath).slice(1).toLowerCase();
@@ -114,16 +125,21 @@ async function hashImage(imagePath) {
       knownLength: fileStats.size
     });
     
+    // IMPORTANT: Hardcode the bridge URL to ensure it's always correct
+    const BRIDGE_URL = 'http://localhost:3001';
+    const hashUrl = `${BRIDGE_URL}/api/v1/hash`;
+    
     // Call the HMA hash endpoint via the bridge
     const result = await retryFetch(async () => {
-      console.log(`Sending hash request to ${config.hma.apiUrl}/api/v1/hash`);
+      console.log(`Sending hash request to ${hashUrl}`);
       
-      const response = await fetch(`${config.hma.apiUrl}/api/v1/hash`, {
+      const response = await fetch(hashUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${config.hma.apiKey}`
         },
-        body: formData
+        body: formData,
+        timeout: config.hma.timeout // Add timeout to prevent hanging requests
       });
       
       if (!response.ok) {
@@ -140,6 +156,11 @@ async function hashImage(imagePath) {
     logEvent('hash_image_error', { error: error.message });
     console.error('Error hashing image:', error);
     throw error;
+  } finally {
+    // Clean up resources to prevent memory leaks
+    if (fileStream) {
+      fileStream.destroy();
+    }
   }
 }
 
@@ -152,11 +173,15 @@ async function matchHash(hashData) {
   try {
     logEvent('match_hash_request', { hashData });
     
+    // IMPORTANT: Hardcode the bridge URL to ensure it's always correct
+    const BRIDGE_URL = 'http://localhost:3001';
+    const matchUrl = `${BRIDGE_URL}/api/v1/match`;
+    
     // Call the HMA match endpoint via the bridge
     const result = await retryFetch(async () => {
-      console.log(`Sending match request to ${config.hma.apiUrl}/api/v1/match`);
+      console.log(`Sending match request to ${matchUrl}`);
       
-      const response = await fetch(`${config.hma.apiUrl}/api/v1/match`, {
+      const response = await fetch(matchUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -289,64 +314,79 @@ async function processImage(imagePath, imageInfo) {
  * conventional REST API format our app expects (/api/v1/hash) and HMA's format.
  */
 async function checkHealth() {
-  const serviceEndpoints = [
-    // Only use the configured bridge URL
-    { host: config.hma.apiUrl, paths: ['/', '/health', '/api/v1/health'] },
-  ];
-
+  // Only use the bridge service - NEVER try to connect directly to HMA service
   console.log('Performing HMA health check...');
   
-  for (const service of serviceEndpoints) {
-    for (const path of service.paths) {
-      const url = `${service.host}${path}`;
+  // Only check the bridge service, not direct HMA service
+  const url = `${config.hma.apiUrl}/health`;
+  console.log(`Trying HMA bridge health check at ${url}`);
+  
+  try {
+    // Setup timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`Timeout of ${config.hma.timeout}ms exceeded`)), config.hma.timeout);
+    });
+    
+    // Make the request with timeout
+    const response = await Promise.race([
+      fetch(url, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json, text/plain, */*',
+        },
+      }),
+      timeoutPromise
+    ]);
+    
+    if (response.ok) {
+      let healthData;
       try {
-        console.log(`Trying HMA health check at ${url}`);
-        
-        // Setup timeout promise
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error(`Timeout of ${config.hma.timeout}ms exceeded`)), config.hma.timeout);
-        });
-        
-        // Make the request with timeout
-        const response = await Promise.race([
-          fetch(url, {
-            method: 'GET',
-            headers: {
-              'Accept': 'application/json, text/plain, */*',
-            },
-          }),
-          timeoutPromise
-        ]);
-        
-        // For each attempt we need to create a fresh copy of the response
-        // to avoid "body used already" errors
-        const clonedResponse = response.clone();
-        
-        if (response.ok) {
-          try {
-            // Try to parse as JSON first
-            const data = await response.json();
-            console.log(`HMA health check succeeded at ${url}`);
-            return { success: true, endpoint: path, healthData: data };
-          } catch (e) {
-            // If JSON parsing fails, try text
-            const text = await clonedResponse.text();
-            if (text) {
-              console.log(`HMA health check succeeded at ${url}`);
-              return { success: true, endpoint: path, healthData: { status: 'ok', note: 'Using root endpoint as health check' } };
-            }
-          }
-        }
-      } catch (error) {
-        console.log(`HMA health check error at ${url}: ${error.message}`);
-        // Continue to next endpoint on failure
+        // Try to parse as JSON first
+        healthData = await response.json();
+      } catch (e) {
+        // If JSON parsing fails, use a simple default
+        healthData = { status: 'ok', note: 'Bridge service is available' };
       }
+      
+      console.log(`HMA bridge health check succeeded at ${url}`);
+      return { success: true, endpoint: '/health', healthData };
+    } else {
+      throw new Error(`Health check failed with status: ${response.status}`);
+    }
+  } catch (error) {
+    console.log(`HMA bridge health check error: ${error.message}`);
+    
+    // Try a fallback to root endpoint
+    try {
+      const rootUrl = config.hma.apiUrl;
+      console.log(`Trying fallback HMA bridge health check at ${rootUrl}`);
+      
+      const response = await Promise.race([
+        fetch(rootUrl, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json, text/plain, */*',
+          },
+        }),
+        timeoutPromise
+      ]);
+      
+      if (response.ok) {
+        console.log(`HMA bridge health check succeeded at ${rootUrl}`);
+        return { 
+          success: true, 
+          endpoint: '/', 
+          healthData: { status: 'ok', note: 'Using root endpoint as health check' } 
+        };
+      }
+    } catch (fallbackError) {
+      console.log(`HMA bridge fallback health check error: ${fallbackError.message}`);
     }
   }
   
-  // If we've exhausted all endpoints and services, return failure
-  const error = new Error('Failed to connect to HMA service after trying all endpoints');
-  console.log(`HMA health check failed: ${error.message}`);
+  // If we've exhausted all options, return failure
+  const error = new Error('Failed to connect to HMA bridge service');
+  console.log(`HMA bridge health check failed: ${error.message}`);
   return { success: false, error };
 }
 

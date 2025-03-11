@@ -75,7 +75,7 @@ class PDSConfig {
     
     // HMA settings
     this.hma = {
-      apiUrl: process.env.HMA_API_URL || 'http://localhost:3001',
+      apiUrl: 'http://localhost:3001',
       apiKey: process.env.HMA_API_KEY || 'your-hma-api-key',
       matchThreshold: parseFloat(process.env.HMA_MATCH_THRESHOLD || '0.8'),
       logDirectory: process.env.HMA_LOG_DIR || './logs/hma',
