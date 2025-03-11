@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import atProtoService from '../services/atproto';
 
-// PDS server is running on port 3002
+// Use the correct absolute URL for the PDS server
 const PDS_URL = 'http://localhost:3002';
 
 const Home = () => {
@@ -38,8 +38,15 @@ const Home = () => {
         console.log('Timeline response:', response);
         
         if (response && response.photos) {
+          console.log('Photos found:', response.photos.length);
+          // Log the first photo for debugging
+          if (response.photos.length > 0) {
+            console.log('First photo:', response.photos[0]);
+            console.log('Image URL for first photo:', `${PDS_URL}/blobs/${response.photos[0].blob_id}`);
+          }
           setPosts(response.photos);
         } else {
+          console.log('No photos found in response');
           setPosts([]);
         }
       } catch (err) {
@@ -93,10 +100,14 @@ const Home = () => {
                   src={`${PDS_URL}/blobs/${photo.blob_id}`} 
                   alt={photo.alt_text || photo.caption} 
                   className="post-image"
+                  onError={(e) => {
+                    console.error(`Failed to load image: ${PDS_URL}/blobs/${photo.blob_id}`);
+                    e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2VlZSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNHB4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBhbGlnbm1lbnQtYmFzZWxpbmU9Im1pZGRsZSIgZmlsbD0iIzg4OCI+SW1hZ2UgTG9hZCBFcnJvcjwvdGV4dD48L3N2Zz4=';
+                  }}
                 />
               </div>
               <div className="post-content">
-                <p className="post-caption">{photo.caption}</p>
+                {photo.caption && <p className="post-caption">{photo.caption}</p>}
                 {photo.location && <p className="post-location">{photo.location}</p>}
                 {photo.tags && photo.tags.length > 0 && (
                   <div className="post-tags">

@@ -1,0 +1,6 @@
+<invoke name="run_terminal_cmd">
+<parameter name="command">git clone https://github.com/julietshen/atproto-hma.git</parameter>
+<parameter name="is_background">false</parameter>
+<parameter name="require_user_approval">true</parameter>
+<parameter name="explanation">Cloning the HMA repository to examine its structure and start integration</parameter>
+</invoke> 
