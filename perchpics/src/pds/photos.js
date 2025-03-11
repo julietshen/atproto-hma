@@ -99,6 +99,14 @@ export function setupPhotoRoutes(app, db) {
               ).catch(err => {
                 console.error('Error updating photo with HMA results:', err);
               });
+              
+              // Store the match details in the moderation_logs table
+              db.run(
+                'INSERT INTO moderation_logs (photo_id, match_data, created_at) VALUES (?, ?, ?)',
+                [result.id, JSON.stringify(hmaResult), new Date().toISOString()]
+              ).catch(err => {
+                console.error('Error storing HMA match data in moderation logs:', err);
+              });
             } else {
               // Update the photo record to show it was checked but no match
               db.run(
@@ -111,6 +119,25 @@ export function setupPhotoRoutes(app, db) {
           })
           .catch(error => {
             console.error('Error in background HMA processing:', error);
+            
+            // Even on error, mark the image as checked to prevent endless retry loops
+            db.run(
+              'UPDATE photos SET hma_checked = ?, hma_checked_at = ? WHERE id = ?',
+              [true, new Date().toISOString(), result.id]
+            ).catch(err => {
+              console.error('Error updating photo after HMA processing error:', err);
+            });
+            
+            // Log the error
+            const errorMessage = error.message || 'Unknown error';
+            
+            // Log the error to the moderation logs for later review
+            db.run(
+              'INSERT INTO moderation_logs (photo_id, match_data, created_at) VALUES (?, ?, ?)',
+              [result.id, JSON.stringify({ error: errorMessage, type: 'hma_processing_error' }), new Date().toISOString()]
+            ).catch(err => {
+              console.error('Error storing HMA error in moderation logs:', err);
+            });
           });
       } catch (hmaError) {
         // Log the error but don't fail the upload
@@ -191,8 +218,8 @@ export function setupPhotoRoutes(app, db) {
         return res.status(404).json({ error: 'File not found' });
       }
       
-      // Serve the file
-      res.sendFile(filePath);
+      // Serve the file (using absolute path)
+      res.sendFile(path.resolve(filePath));
     } catch (error) {
       console.error('Serve file error:', error);
       res.status(500).json({ error: 'Failed to serve file' });

@@ -149,11 +149,7 @@ export async function createDatabase() {
     // Get moderation logs
     getModerationLogs: async (limit = 50, offset = 0) => {
       return db.all(
-        `SELECT ml.*, p.author_did, p.caption, p.blob_id 
-         FROM moderation_logs ml
-         JOIN photos p ON ml.photo_id = p.id
-         ORDER BY ml.created_at DESC
-         LIMIT ? OFFSET ?`,
+        'SELECT * FROM moderation_logs ORDER BY created_at DESC LIMIT ? OFFSET ?',
         [limit, offset]
       );
     },
@@ -164,6 +160,50 @@ export async function createDatabase() {
         'SELECT * FROM moderation_logs WHERE photo_id = ? ORDER BY created_at DESC',
         [photoId]
       );
+    },
+    
+    // Get moderation stats
+    getModerationStats: async () => {
+      // Get overall stats
+      const totalStats = await db.get(`
+        SELECT
+          COUNT(*) as total_photos,
+          SUM(CASE WHEN hma_checked = 1 THEN 1 ELSE 0 END) as checked_photos,
+          SUM(CASE WHEN hma_matched = 1 THEN 1 ELSE 0 END) as matched_photos
+        FROM photos
+      `);
+      
+      // Get stats by action type
+      const actionStats = await db.all(`
+        SELECT
+          hma_action,
+          COUNT(*) as count
+        FROM photos
+        WHERE hma_checked = 1
+        GROUP BY hma_action
+      `);
+      
+      // Get recently matched photos
+      const recentMatches = await db.all(`
+        SELECT
+          p.id,
+          p.author_did,
+          p.caption,
+          p.blob_id,
+          p.created_at,
+          p.hma_action,
+          p.hma_checked_at
+        FROM photos p
+        WHERE p.hma_matched = 1
+        ORDER BY p.hma_checked_at DESC
+        LIMIT 10
+      `);
+      
+      return {
+        totalStats,
+        actionStats,
+        recentMatches
+      };
     },
     
     // Raw database access
@@ -202,13 +242,45 @@ async function createTables(db) {
     )
   `);
   
+  // Ensure HMA columns exist (for backward compatibility)
+  try {
+    // Check if columns exist
+    const tableInfo = await db.all("PRAGMA table_info(photos)");
+    const columns = tableInfo.map(col => col.name);
+    
+    // Add missing columns if needed
+    if (!columns.includes('hma_checked')) {
+      await db.exec('ALTER TABLE photos ADD COLUMN hma_checked BOOLEAN DEFAULT 0');
+    }
+    if (!columns.includes('hma_matched')) {
+      await db.exec('ALTER TABLE photos ADD COLUMN hma_matched BOOLEAN DEFAULT 0');
+    }
+    if (!columns.includes('hma_action')) {
+      await db.exec('ALTER TABLE photos ADD COLUMN hma_action TEXT');
+    }
+    if (!columns.includes('hma_checked_at')) {
+      await db.exec('ALTER TABLE photos ADD COLUMN hma_checked_at TEXT');
+    }
+  } catch (error) {
+    console.error('Error ensuring HMA columns exist:', error);
+  }
+  
   // Photo tags table
   await db.exec(`
     CREATE TABLE IF NOT EXISTS photo_tags (
       photo_id TEXT NOT NULL,
       tag TEXT NOT NULL,
-      PRIMARY KEY (photo_id, tag),
-      FOREIGN KEY (photo_id) REFERENCES photos(id) ON DELETE CASCADE
+      FOREIGN KEY (photo_id) REFERENCES photos(id)
+    )
+  `);
+  
+  // Blobs table
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS blobs (
+      id TEXT PRIMARY KEY,
+      data BLOB NOT NULL,
+      content_type TEXT NOT NULL,
+      size INTEGER NOT NULL
     )
   `);
   
@@ -217,47 +289,10 @@ async function createTables(db) {
     CREATE TABLE IF NOT EXISTS moderation_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       photo_id TEXT NOT NULL,
-      match_data TEXT NOT NULL,
+      action TEXT NOT NULL,
+      reason TEXT,
       created_at TEXT NOT NULL,
-      FOREIGN KEY (photo_id) REFERENCES photos(id) ON DELETE CASCADE
-    )
-  `);
-  
-  // Blobs table to track uploaded files
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS blobs (
-      id TEXT PRIMARY KEY,
-      size INTEGER NOT NULL,
-      mime_type TEXT NOT NULL,
-      created_at TEXT NOT NULL
+      FOREIGN KEY (photo_id) REFERENCES photos(id)
     )
   `);
 }
-
-// Create a demo user if it doesn't exist
-async function createDemoUser(db) {
-  try {
-    // Check if demo user already exists
-    const existingUser = await db.get('SELECT * FROM users WHERE username = ?', ['demo']);
-    
-    if (!existingUser) {
-      console.log('Creating demo user...');
-      
-      // Generate a DID for the demo user
-      const did = 'did:perchpics:demo';
-      
-      // Hash the password
-      const passwordHash = await bcrypt.hash('perchpics123', 10);
-      
-      // Create the demo user
-      await db.run(
-        'INSERT INTO users (username, password_hash, did, created_at) VALUES (?, ?, ?, ?)',
-        ['demo', passwordHash, did, new Date().toISOString()]
-      );
-      
-      console.log('Demo user created successfully!');
-    }
-  } catch (error) {
-    console.error('Error creating demo user:', error);
-  }
-} 
