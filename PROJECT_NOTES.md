@@ -29,6 +29,8 @@ The goal of this project is to integrate [AT Protocol](https://atproto.com/) wit
    - The default configuration expects a "media_match" user with correct privileges
    - HMA relies on configuration files at specific paths within the container
    - Environment variable overrides may not fully replace the need for proper configuration files
+   - The HMA container needs specific database tables to exist, especially `signal_type_override`
+   - HMA depends on proper database initialization before it can run
 
 2. **Docker Networking**:
    - Services need proper configuration to communicate with each other
@@ -38,6 +40,40 @@ The goal of this project is to integrate [AT Protocol](https://atproto.com/) wit
    - Start with minimal configurations and build up
    - Test database connections independently before integrating
    - Consider using mock services for initial development
+   - Follow the official HMA docker-compose.yaml approach for most reliable results
+
+4. **Database Schema Requirements**:
+   - The `signal_type_override` table is crucial for HMA to function
+   - Proper indices are needed for performance on larger tables
+   - Let HMA handle its own migrations when possible instead of custom scripts
+   - If migrations fail, check logs carefully for specific table/column requirements
+
+5. **Integration Architecture**:
+   - The perchpics service communicates with HMA via its REST API
+   - Clean separation between services allows for more resilient architecture
+   - Configuration values must be properly shared across services
+
+## Important Reminders
+
+1. **Always follow the official HMA setup pattern**:
+   - Use the same service names as in the official docker-compose.yaml
+   - Use the same environment variables and initialization approach
+   - Avoid custom entrypoints or initialization scripts unless necessary
+
+2. **Database initialization**:
+   - Let HMA handle its own migrations when possible
+   - If custom initialization is needed, always include the `signal_type_override` table
+   - Ensure database user permissions are correct before starting services
+
+3. **Troubleshooting**:
+   - Check container logs first (`docker-compose logs app` or `docker-compose logs db`)
+   - Verify database connectivity directly from containers if needed
+   - Use debug containers with sleep infinity for inspection when needed
+
+4. **Configuration management**:
+   - Keep .env files properly versioned with .env.example templates
+   - Document all environment variables and their purpose
+   - Be careful with credential management in version control
 
 ## Next Steps
 
@@ -97,7 +133,7 @@ docker-compose up -d
 docker ps
 
 # View logs for a specific container
-docker logs atproto-hma-hma-1
+docker logs atproto-hma-app-1
 
 # Start PerchPics (after configuring ports)
 cd perchpics && npm start
@@ -113,7 +149,30 @@ docker exec -it atproto-hma-db-1 psql -U postgres
 
 # Create the media_match user (if needed)
 CREATE USER media_match WITH PASSWORD 'media_match';
-GRANT ALL PRIVILEGES ON DATABASE hma TO media_match;
+GRANT ALL PRIVILEGES ON DATABASE media_match TO media_match;
+
+# Check for existing tables
+\c media_match
+\dt
+
+# Check for specific table structure
+\d signal_type_override
+```
+
+### Debugging Commands
+```bash
+# Check if HMA is accepting connections
+curl -s http://localhost:5000/ui
+
+# Check container running status
+docker-compose ps
+
+# Restart specific service
+docker-compose restart app
+
+# Create a debug container for inspection
+docker-compose -f docker-compose.debug.yml up -d hma-debug
+docker-compose exec hma-debug bash
 ```
 
 ## Required Environment Variables
