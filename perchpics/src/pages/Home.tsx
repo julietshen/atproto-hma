@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import atProtoService from '../services/atproto';
 
-// Import PDS_URL from the atproto service
-const PDS_URL = 'http://localhost:3001';
+// PDS server is running on port 3002
+const PDS_URL = 'http://localhost:3002';
 
 const Home = () => {
   const [posts, setPosts] = useState<any[]>([]);
