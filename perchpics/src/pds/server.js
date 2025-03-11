@@ -25,6 +25,11 @@ import { setupPhotoRoutes } from './photos.js';
 import { setupWebhookRoutes } from './webhooks.js';
 import { setupModerationRoutes } from './moderation.js';
 import hmaService from '../services/hma.js';
+import { startMemoryMonitor, logMemoryUsage } from '../utils/memory-monitor.js';
+
+// Constants
+const MEMORY_CHECK_INTERVAL_MS = 60000; // 1 minute
+const MEMORY_WARNING_THRESHOLD_MB = 1024; // 1 GB
 
 /**
  * Check if a port is available
@@ -70,6 +75,10 @@ const ensureDirectories = () => {
  */
 export const initPDSServer = async () => {
   try {
+    // Start memory monitor
+    const memoryMonitor = startMemoryMonitor(MEMORY_CHECK_INTERVAL_MS, MEMORY_WARNING_THRESHOLD_MB);
+    console.log('Memory monitoring enabled');
+    
     // Ensure required directories exist
     ensureDirectories();
     
