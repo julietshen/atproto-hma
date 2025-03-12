@@ -12,6 +12,7 @@ import crypto from 'crypto';
 import { config } from '../config.js';
 import { authenticateToken } from './auth.js';
 import hmaService from '../services/hma.js';
+import altitudeService from '../services/altitude.js';
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -83,12 +84,13 @@ export function setupPhotoRoutes(app, db) {
           uri: photoUri,
           userDid: did,
           photoId: result.id,
-          blobId: blobId
+          blobId: blobId,
+          ipAddress: req.ip
         };
         
         // Process the image with HMA in the background
         hmaService.processImage(req.file.path, imageInfo)
-          .then(hmaResult => {
+          .then(async hmaResult => {
             // Safely handle the result, ensuring it exists and has expected properties
             if (hmaResult && hmaResult.matched) {
               console.log(`HMA match found for image ${blobId} from user ${did}`);
@@ -108,6 +110,35 @@ export function setupPhotoRoutes(app, db) {
               ).catch(err => {
                 console.error('Error logging HMA match:', err);
               });
+              
+              // Send to Altitude for review if HMA matched
+              try {
+                const altitudeResult = await altitudeService.processHmaMatch(
+                  hmaResult, 
+                  req.file.path,
+                  {
+                    uri: photoUri,
+                    userDid: did,
+                    photoId: result.id,
+                    ipAddress: req.ip
+                  }
+                );
+                
+                // Log Altitude submission if successful
+                if (altitudeResult.altitude?.success) {
+                  console.log(`Image ${blobId} submitted to Altitude for review`);
+                  
+                  // Update photo with Altitude submission info
+                  db.run(
+                    'UPDATE photos SET altitude_submitted = ?, altitude_id = ? WHERE id = ?',
+                    [true, altitudeResult.altitude.altitude_id, result.id]
+                  ).catch(err => {
+                    console.error('Error updating photo with Altitude submission:', err);
+                  });
+                }
+              } catch (altitudeError) {
+                console.error(`Error submitting to Altitude: ${altitudeError.message}`);
+              }
             } else {
               // No match or invalid result, still mark as checked
               db.run(
@@ -118,20 +149,11 @@ export function setupPhotoRoutes(app, db) {
               });
             }
           })
-          .catch(error => {
-            console.error('Error in background HMA processing:', error);
-            
-            // Mark as checked but failed
-            db.run(
-              'UPDATE photos SET hma_checked = ?, hma_error = ?, hma_checked_at = ? WHERE id = ?',
-              [true, error.message, new Date().toISOString(), result.id]
-            ).catch(err => {
-              console.error('Error updating photo with HMA error:', err);
-            });
+          .catch(err => {
+            console.error('Error processing image with HMA:', err);
           });
       } catch (hmaError) {
-        // Log the error but don't fail the upload
-        console.error('Error setting up HMA processing:', hmaError);
+        console.error('Error initiating HMA processing:', hmaError);
       }
       
       // Return the photo ID

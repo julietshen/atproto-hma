@@ -24,6 +24,7 @@ import { setupAuthRoutes } from './auth.js';
 import { setupPhotoRoutes } from './photos.js';
 import { setupWebhookRoutes } from './webhooks.js';
 import { setupModerationRoutes } from './moderation.js';
+import { setupApiRoutes } from './api.js';
 import hmaService from '../services/hma.js';
 import { startMemoryMonitor, logMemoryUsage } from '../utils/memory-monitor.js';
 
@@ -153,6 +154,7 @@ export const initPDSServer = async () => {
     setupPhotoRoutes(app, db);
     setupWebhookRoutes(app, db);
     setupModerationRoutes(app, db);
+    setupApiRoutes(app, db);
     
     // AT Protocol standard health endpoint
     app.get('/xrpc/_health', (req, res) => {

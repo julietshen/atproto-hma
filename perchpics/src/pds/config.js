@@ -77,4 +77,19 @@ export const pdsConfig = {
   updateWebhookUrl: updateHmaWebhookUrl
 };
 
+// Altitude integration configuration
+export const altitudeConfig = {
+  // The URL where the Altitude application is available
+  url: process.env.ALTITUDE_URL || 'http://localhost:8080',
+  
+  // Webhook endpoint for Altitude to send verdicts back to
+  webhookEndpoint: process.env.ALTITUDE_WEBHOOK_ENDPOINT || '/api/altitude/webhook',
+  
+  // API key for Altitude if required
+  apiKey: process.env.ALTITUDE_API_KEY || '',
+  
+  // Enable/disable Altitude integration
+  enabled: process.env.ALTITUDE_ENABLED === 'true' || false
+};
+
 export default pdsConfig; 
