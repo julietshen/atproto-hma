@@ -7,6 +7,7 @@ import Login from './pages/Login';
 import Home from './pages/Home';
 import Profile from './pages/Profile';
 import Upload from './pages/Upload';
+import ModReview from './pages/ModReview';
 
 // Components
 import Navbar from './components/Navbar';
@@ -64,6 +65,12 @@ function App() {
           <Route 
             path="/upload" 
             element={isLoggedIn ? <Upload /> : <Navigate to="/login" />} 
+          />
+          
+          {/* Moderation Review Route - Protected, requires authentication */}
+          <Route 
+            path="/moderation" 
+            element={isLoggedIn ? <ModReview /> : <Navigate to="/login" />} 
           />
           
           {/* Catch-all route - Redirect to home */}

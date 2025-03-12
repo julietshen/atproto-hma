@@ -24,7 +24,7 @@ dotenv.config({ path: path.resolve(__dirname, '.env') });
 // Configuration from environment or defaults
 const HMA_SERVICE_URL = process.env.HMA_SERVICE_URL || 'http://localhost:5000';
 const BRIDGE_API_URL = 'http://localhost:3001';
-const API_KEY = process.env.HMA_API_KEY || 'dev_key';
+const API_KEY = process.env.HMA_API_KEY || 'replace-with-your-api-key';
 const DEMO_IMAGES_PATH = path.resolve(__dirname, '../demo_images');
 
 // Color codes for terminal output

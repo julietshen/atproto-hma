@@ -308,3 +308,38 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - [AT Protocol](https://atproto.com/) for the underlying protocol
 - [Bluesky](https://bsky.app/) for the social network
 - The AT Protocol team for their documentation and SDKs 
+
+## Altitude Integration for Content Moderation
+
+PerchPics now includes integration with [Altitude](https://github.com/Jigsaw-Code/altitude), a content moderation tool developed by Jigsaw and Tech Against Terrorism. This integration enhances the HMA hash matching system by providing a dedicated interface for human review of matched content.
+
+### Features
+
+- Images that match known hashes are automatically sent to Altitude for review
+- Admin users can access a dedicated moderation interface via the "Moderation" link in the navbar
+- Decisions made in Altitude are recorded back in the PerchPics database
+- Feedback loop with hash providers to improve accuracy of future matches
+
+### Setup
+
+1. Deploy an Altitude instance following the instructions at [Jigsaw-Code/altitude](https://github.com/Jigsaw-Code/altitude)
+2. Configure the Altitude integration in your `.env` file:
+   ```
+   ALTITUDE_ENABLED=true
+   ALTITUDE_URL=http://your-altitude-instance-url
+   ALTITUDE_API_KEY=your_altitude_api_key
+   ALTITUDE_WEBHOOK_ENDPOINT=/api/altitude/webhook
+   ```
+3. Restart your PerchPics application
+4. Log in with an admin account to access the moderation interface
+
+### Architecture
+
+The Altitude integration consists of several components:
+
+1. **Altitude Service**: A Node.js service that communicates with the Altitude API
+2. **Admin UI**: A React component that embeds the Altitude interface
+3. **Database Extensions**: Additional fields in the database to track Altitude submissions and decisions
+4. **API Endpoints**: Routes for handling configuration and webhooks
+
+When an image matches a hash in HMA, it is automatically sent to Altitude for review. Admin users can then review the flagged content in the moderation interface and make decisions. These decisions are sent back to PerchPics via webhook and recorded in the database. 

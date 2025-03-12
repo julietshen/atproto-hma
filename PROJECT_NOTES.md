@@ -235,3 +235,75 @@ docker-compose exec hma-debug bash
 ### PerchPics
 - PORT=3002 (updated from 3001 to avoid conflicts)
 - HMA_URL=http://localhost:5000 
+
+## Recent Updates and Improvements
+
+### HMA Logging System Enhancements (March 2025)
+- Improved formatting for both successful match and no-match cases
+- Added consistent separator lines for better log readability
+- Enhanced debug information with clear status indicators
+- Standardized success/failure messaging format
+- Added detailed context in log messages (hash IDs, match scores, etc.)
+
+### Configuration Troubleshooting
+
+#### HMA Bridge Configuration
+When connecting PerchPics to HMA, proper configuration is essential:
+
+1. **Connection Order**: 
+   - Correct: PerchPics → HMA Bridge (3001) → HMA Service (5000)
+   - Incorrect: PerchPics → HMA Service (5000) directly
+
+2. **Environment Variable Configuration**:
+   ```
+   # In PerchPics .env:
+   HMA_API_URL=http://localhost:5000      # Direct service URL (used by bridge)
+   HMA_BRIDGE_API_URL=http://localhost:3001 # Bridge URL (used by application)
+   ```
+
+3. **Common Connection Issues**:
+   - "HMA bridge responded with status 404": Application trying to use `/api/v1/...` endpoints directly with HMA service
+   - "Unable to connect to HMA service": Bridge URL misconfigured or service not running
+
+#### Troubleshooting Application Crashes
+The frontend application (Vite) frequently crashes with `Killed: 9`. This is typically due to:
+1. Memory limits on the development machine
+2. Port conflicts when services restart
+3. WebSocket connection issues during hot module replacement
+
+Solutions:
+- Use the `start:clean:debug` script which kills existing processes on the required ports
+- Reduce memory usage by closing other applications
+- Monitor memory usage through the built-in memory monitor
+
+## HMA Integration Testing Tips
+
+### Verifying Correct Bridge Configuration
+```
+-------------------- HMA CONFIGURATION --------------------
+Bridge URL: http://localhost:3001 (this is the primary API endpoint used)
+Service URL: http://localhost:5000 (direct HMA service, used by bridge)
+Environment Variables:
+  HMA_API_URL: http://localhost:5000
+  HMA_BRIDGE_API_URL: http://localhost:3001
+  HMA_SERVICE_API_URL: http://localhost:5000
+------------------------------------------------------------
+```
+
+The above configuration shows the proper setup with both bridge and service URLs correctly configured.
+
+### Logging Verification
+Successful HMA health check should show:
+```
+✅ HMA SUCCESS: HMA bridge health check succeeded
+   url: http://localhost:3001/health
+   status: healthy
+   endpoint: /health
+   ----------------------------------------
+```
+
+No-match cases now use consistent formatting:
+```
+🔍 HMA DEBUG: Image did not match any entries in HMA database
+   ----------------------------------------
+``` 

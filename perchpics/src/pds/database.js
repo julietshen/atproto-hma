@@ -235,17 +235,21 @@ async function createTables(db) {
       hma_matched BOOLEAN DEFAULT 0,
       hma_action TEXT,
       hma_checked_at TEXT,
+      altitude_submitted BOOLEAN DEFAULT 0,
+      altitude_id TEXT,
+      moderation_status TEXT,
+      moderation_time TEXT,
       FOREIGN KEY (author_did) REFERENCES users(did)
     )
   `);
   
-  // Ensure HMA columns exist (for backward compatibility)
+  // Ensure HMA and Altitude columns exist (for backward compatibility)
   try {
     // Check if columns exist
     const tableInfo = await db.all("PRAGMA table_info(photos)");
     const columns = tableInfo.map(col => col.name);
     
-    // Add missing columns if needed
+    // Add missing HMA columns if needed
     if (!columns.includes('hma_checked')) {
       await db.exec('ALTER TABLE photos ADD COLUMN hma_checked BOOLEAN DEFAULT 0');
     }
@@ -258,8 +262,22 @@ async function createTables(db) {
     if (!columns.includes('hma_checked_at')) {
       await db.exec('ALTER TABLE photos ADD COLUMN hma_checked_at TEXT');
     }
+    
+    // Add missing Altitude columns if needed
+    if (!columns.includes('altitude_submitted')) {
+      await db.exec('ALTER TABLE photos ADD COLUMN altitude_submitted BOOLEAN DEFAULT 0');
+    }
+    if (!columns.includes('altitude_id')) {
+      await db.exec('ALTER TABLE photos ADD COLUMN altitude_id TEXT');
+    }
+    if (!columns.includes('moderation_status')) {
+      await db.exec('ALTER TABLE photos ADD COLUMN moderation_status TEXT');
+    }
+    if (!columns.includes('moderation_time')) {
+      await db.exec('ALTER TABLE photos ADD COLUMN moderation_time TEXT');
+    }
   } catch (error) {
-    console.error('Error ensuring HMA columns exist:', error);
+    console.error('Error ensuring HMA and Altitude columns exist:', error);
   }
   
   // Photo tags table

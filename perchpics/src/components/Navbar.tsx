@@ -36,6 +36,12 @@ const Navbar = () => {
           >
             Profile
           </Link>
+          <Link 
+            to="/moderation" 
+            className={`navbar-link ${location.pathname === '/moderation' ? 'active' : ''}`}
+          >
+            HMA Review
+          </Link>
           <button onClick={handleLogout}>Logout</button>
         </div>
       </div>
