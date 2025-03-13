@@ -17,6 +17,9 @@ yarn-error.log
 !.env.example
 !.env.production.example
 
+# Project documentation not for version control
+PROJECT_NOTES.md
+
 # Keys, certificates, and credentials
 *.pem
 *.key
