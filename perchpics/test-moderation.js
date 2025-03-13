@@ -112,11 +112,11 @@ async function runTests() {
   }
   
   console.log('\nALL TESTS PASSED!');
-  console.log('The ModReview component can be tested by:');
+  console.log('The Altitude moderation interface can be tested by:');
   console.log('1. Log in as admin (username: admin, password: adminpassword)');
   console.log('2. Click on the "Moderation" link in the navbar');
-  console.log('3. Verify that the ModReview component loads correctly');
-  console.log('4. Check that the iframe is created with the URL:', altitudeConfig.url);
+  console.log('3. Verify that you are redirected to the Altitude frontend (http://localhost:4200)');
+  console.log('4. Check that the Altitude frontend can connect to the API:', altitudeConfig.url);
 }
 
 // Run the tests

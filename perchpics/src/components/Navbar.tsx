@@ -1,48 +1,40 @@
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import atProtoService from '../services/atproto';
 
 const Navbar = () => {
-  const navigate = useNavigate();
   const location = useLocation();
   
   const handleLogout = () => {
     atProtoService.logout();
-    navigate('/login');
-    window.location.reload(); // Force reload to clear state
+    window.location.href = '/login';
   };
 
   return (
     <nav className="navbar">
       <div className="navbar-container">
-        <Link to="/" className="navbar-logo">
+        <Link to="/home" className="navbar-logo">
           PerchPics
         </Link>
         <div className="navbar-links">
-          <Link 
-            to="/" 
-            className={`navbar-link ${location.pathname === '/' ? 'active' : ''}`}
-          >
+          <Link to="/home" className={location.pathname === '/home' ? 'active' : ''}>
             Home
           </Link>
-          <Link 
-            to="/upload" 
-            className={`navbar-link ${location.pathname === '/upload' ? 'active' : ''}`}
-          >
-            Upload
-          </Link>
-          <Link 
-            to={`/profile/${atProtoService.getCurrentUserDid()}`} 
-            className={`navbar-link ${location.pathname.startsWith('/profile') ? 'active' : ''}`}
-          >
+          <Link to="/profile" className={location.pathname === '/profile' ? 'active' : ''}>
             Profile
           </Link>
-          <Link 
-            to="/moderation" 
-            className={`navbar-link ${location.pathname === '/moderation' ? 'active' : ''}`}
-          >
-            HMA Review
+          <Link to="/upload" className={location.pathname === '/upload' ? 'active' : ''}>
+            Upload
           </Link>
-          <button onClick={handleLogout}>Logout</button>
+          <a
+            href="http://localhost:4200"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Moderation
+          </a>
+          <button onClick={handleLogout} className="logout-btn">
+            Logout
+          </button>
         </div>
       </div>
     </nav>
