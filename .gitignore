@@ -124,8 +124,12 @@ build/
 *.log
 
 # Third-party dependencies
-altitude/
 altitude-frontend/
+
+# Angular specific
+altitude/client/node_modules/
+altitude/client/dist/
+altitude/client/.angular/
 
 # Editor and OS files
 .DS_Store
