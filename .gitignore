@@ -1,0 +1,141 @@
+# Node.js dependencies
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+.pnpm-debug.log
+.npm/
+
+# Environment variables and secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+.env.*
+!.env.example
+!.env.production.example
+
+# Keys, certificates, and credentials
+*.pem
+*.key
+*.pub
+*.cert
+*.crt
+*.csr
+*.ca-bundle
+*.p12
+*.pfx
+*id_rsa*
+*ssh*key*
+*authorized_keys*
+*known_hosts*
+*credentials*
+*credential*
+token
+tokens
+secret
+secrets
+password
+passwords
+api_key
+apikey
+api_keys
+apikeys
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+.DS_Store
+
+# Cache directories
+.cache/
+.npm/
+.eslintcache
+.prettiercache
+.stylelintcache
+.parcel-cache/
+.vite/
+
+# Temporary and data files
+tmp/
+temp/
+.tmp/
+*.tmp
+data/*.db
+data/blobs/
+
+# Editor and IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+.history/
+*.sublime-workspace
+*.sublime-project
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Deployment related
+.vercel
+.netlify
+.serverless/
+.fusebox/
+.dynamodb/
+.webpack/
+
+# Specific project files that might contain sensitive info
+hma-credentials.json
+altitude-credentials.json
+
+# Build artifacts
+dist/
+build/
+*.log
+
+# Third-party dependencies
+altitude/
+altitude-frontend/
+
+# Editor and OS files
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log* 
