@@ -12,7 +12,7 @@ import crypto from 'crypto';
 import { config } from '../config.js';
 import { authenticateToken } from './auth.js';
 import hmaService from '../services/hma.js';
-import altitudeService from '../services/altitude.js';
+import altitudeService from './services/altitude.js';
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({

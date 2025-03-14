@@ -147,7 +147,7 @@ export const initPDSServer = async () => {
       allowedHeaders: ['Content-Type', 'Authorization'],
       credentials: true
     }));
-    app.use(bodyParser.json());
+    app.use(bodyParser.json({ limit: '50mb' }));
     
     // Set up routes
     setupAuthRoutes(app, db);

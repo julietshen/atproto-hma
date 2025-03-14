@@ -43,7 +43,7 @@ services:
     build:
       context: .
     ports:
-      - "3001:3000"
+      - "3001:3000"  # Map host port 3001 to container port 3000
     environment:
       DATABASE_URL: postgresql://media_match:hunter2@db:5432/atproto_hma
       HMA_API_URL: http://app:5000
@@ -51,11 +51,16 @@ services:
       LOG_LEVEL: INFO
       PORT: 3000
       HOST: 0.0.0.0
+      # Connect to the real Altitude service
+      USE_MOCK_SERVICES: "false"
+      ALTITUDE_API_URL: http://host.docker.internal:80
     depends_on:
       - app
       - db
     networks:
       - backend
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 volumes:
   postgres-data:
