@@ -159,6 +159,37 @@ This principle is crucial for maintainability, as it ensures we're using HMA as 
    - Performance testing
    - Proper secrets management
 
+## Docker Setup Success (March 2025)
+
+We successfully got the Docker-based HMA environment working with our PerchPics application. Here are the key observations and solutions:
+
+1. **Database Configuration**:
+   - The HMA bridge service expects to connect to a PostgreSQL database at hostname "db"
+   - This hostname only resolves within the Docker network
+   - Running the HMA bridge outside Docker requires modifying the `.env` file
+
+2. **Docker Container Setup**:
+   - All required services (app, db, atproto-hma) need to be running for proper operation
+   - The `docker-compose.yml` file in the project root provides the complete configuration
+   - Docker needs to be running on the host machine before starting the containers
+
+3. **PerchPics Connection**:
+   - PerchPics can run on the host and still connect to Docker services
+   - The HMA bridge health check works properly when accessible on port 3001
+   - Successful image processing flow has been verified
+
+4. **Common Issues and Solutions**:
+   - "PayloadTooLargeError" in PerchPics logs is normal for large image uploads
+   - Connection errors in Altitude client to "http://gateway:80/" are expected in development
+   - "HMA bridge responded with status 500" typically means database connection issues
+
+5. **Important Port Mappings**:
+   - HMA Bridge: Port 3001
+   - HMA Service: Port 5000 (through Docker)
+   - PerchPics API: Port 3002
+   - PerchPics Frontend: Port 3000
+   - Altitude Client: Port 4200
+
 ## Reference Commands
 
 ### Starting the Services
@@ -306,4 +337,70 @@ No-match cases now use consistent formatting:
 ```
 🔍 HMA DEBUG: Image did not match any entries in HMA database
    ----------------------------------------
+```
+
+## Altitude Integration
+
+### Integration Overview
+The ATProto-HMA bridge integrates with Altitude (a content moderation platform) to provide a streamlined review workflow for moderators. This integration enables content flagged by HMA to be sent to Altitude for human review.
+
+### Implemented Changes and Fixes
+As of March 14, 2025, we've implemented the following fixes to the Altitude integration:
+
+1. **Database Model Updates**:
+   - Added `altitude_task_id` field to the `ModerationLog` model to track Altitude reviews
+   - Created a database migration script to add this field to existing database tables
+   - Added functions for updating and retrieving moderation logs by Altitude task ID
+
+2. **Missing Models Implementation**:
+   - Created `HashResult` model for handling PDQ hash results
+   - Created `MatchResult` model for handling match results from HMA
+   - Added proper imports and structure to link these components together
+
+3. **Case Sensitivity Fixes**:
+   - Fixed import case mismatches between `HMAClient`/`HmaClient` and `ATProtoClient`/`AtprotoClient`
+   - Ensured consistent naming across the entire codebase
+
+### Workflow Details
+The Altitude integration works as follows:
+1. When an image is uploaded through the ATProto-HMA bridge, it's hashed and compared against the HMA database
+2. If a match is found, the bridge creates a review task in Altitude
+3. The Altitude task ID is stored in the `altitude_task_id` field of the `ModerationLog` record
+4. Moderators can then review the content in the Altitude UI
+5. The ATProto-HMA bridge can query the status of reviews using the Altitude API
+
+### Future Improvements
+- Implement webhook support for Altitude to notify the bridge when review decisions are made
+- Add more detailed logging about the Altitude integration process
+- Create a UI component in the bridge dashboard to display Altitude review status
+- Add support for batch processing of review tasks
+
+### Reminders and Notes
+- The Altitude client needs the MongoDB credentials to connect properly to the MongoDB instance
+- Both `author_did` and `photo_id` are required for creating tasks in Altitude; if not provided, the system generates UUIDs as defaults
+- The MongoDB instance running in the Altitude container requires authentication
+- When deploying, make sure to run the database migration script to ensure the `altitude_task_id` field exists
+- The signal initialization script needs to run with the proper MongoDB credentials to set up default signals
+
+### Troubleshooting
+If Altitude integration is not working:
+1. Check that MongoDB credentials are properly configured
+2. Verify that the `HMA_API_URL` environment variable is set correctly (should point to `http://app:5000`)
+3. Check the proper usage of `altitude_client.create_review_task` in the code
+4. Ensure that PDQ hashes are properly passed to Altitude
+5. Look for specific errors related to the Altitude integration in the logs
+
+### Commands for Testing and Setup
+```bash
+# Run the signal initialization script
+./altitude/scripts/run_init_signals.sh
+
+# Check MongoDB environment variables
+docker exec altitude-prod-signal-service-1 bash -c "env | grep MONGO"
+
+# Copy migration script to container and run it
+docker cp src/db/migrate.py atproto-hma-atproto-hma-1:/app/src/db/ && docker exec atproto-hma-atproto-hma-1 python -m src.db.migrate
+
+# Restart the ATProto-HMA bridge
+docker restart atproto-hma-atproto-hma-1
 ``` 
