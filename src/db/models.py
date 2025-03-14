@@ -23,4 +23,5 @@ class ModerationLog(Base):
     action_taken = Column(String, nullable=True)
     hma_response = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    processed_at = Column(DateTime, nullable=True) 
+    processed_at = Column(DateTime, nullable=True)
+    altitude_task_id = Column(String, nullable=True, index=True) 

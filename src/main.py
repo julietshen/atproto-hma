@@ -9,22 +9,30 @@ import logging
 import json
 import requests
 import time
-from flask import Flask, request, jsonify, Response
+import base64
+import uuid
+from flask import Flask, request, jsonify, Response, render_template, send_from_directory
 from dotenv import load_dotenv
 from loguru import logger
 import tempfile
 
 # Import database module
-from src.db import init_db, log_moderation_event, get_moderation_logs, get_moderation_logs_for_photo
+from src.db import init_db, log_moderation_event, get_moderation_logs, get_moderation_logs_for_photo, update_altitude_task, get_moderation_logs_by_altitude_task
+
+# Import service clients
+from src.services.altitude_client import AltitudeClient
 
 # Load environment variables
 load_dotenv()
 
 # Create Flask app
-app = Flask(__name__)
+app = Flask(__name__, 
+            template_folder='templates',
+            static_folder='static')
 
 # Configuration
-HMA_API_URL = os.environ.get("HMA_API_URL", "http://hma:5000")
+HMA_API_URL = os.environ.get("HMA_API_URL", "http://app:5000")
+ALTITUDE_API_URL = os.environ.get("ALTITUDE_API_URL", "http://altitude:80/api")
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:postgres@db:5432/atproto_hma")
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 PORT = int(os.environ.get("PORT", 3000))
@@ -34,6 +42,9 @@ HOST = os.environ.get("HOST", "0.0.0.0")
 logger.remove()
 logger.add(sys.stderr, level=LOG_LEVEL)
 logger.add("logs/app.log", rotation="10 MB", level=LOG_LEVEL)
+
+# Initialize clients
+altitude_client = AltitudeClient(ALTITUDE_API_URL)
 
 # Initialize database
 _db_initialized = False
@@ -48,12 +59,32 @@ def setup():
 
 # API Endpoints
 
+@app.route("/", methods=["GET"])
+def index():
+    """
+    Serve the test page
+    """
+    return render_template("test_page.html")
+
+@app.route("/static/<path:path>")
+def serve_static(path):
+    """
+    Serve static files
+    """
+    return send_from_directory("static", path)
+
 @app.route("/health", methods=["GET"])
 def health_check():
     """
     Health check endpoint.
     """
-    return jsonify({"status": "healthy"})
+    altitude_health = altitude_client.check_health()
+    if altitude_health:
+        logger.info("Altitude service is healthy")
+    else:
+        logger.warning("Altitude service is not healthy or unavailable")
+        
+    return jsonify({"status": "healthy", "altitude_status": altitude_health})
 
 @app.route("/api/v1/hash", methods=["POST"])
 def hash_image():
@@ -228,11 +259,26 @@ def match_hash():
     """
     try:
         logger.info("Received match request")
+        image_data = None
+        image_data_b64 = None
+        image_file_name = None
+        author_did = request.form.get('author_did')
+        photo_id = request.form.get('photo_id')
         
         # Check if we have form data with an image file
         if request.files and 'image' in request.files:
             logger.info("Processing image from form data")
             image_file = request.files['image']
+            image_file_name = image_file.filename
+            
+            # Ensure we have author_did and photo_id
+            if not author_did:
+                author_did = "default_author_" + str(uuid.uuid4())[:8]
+                logger.info(f"No author_did provided, using default: {author_did}")
+                
+            if not photo_id:
+                photo_id = "default_photo_" + str(uuid.uuid4())
+                logger.info(f"No photo_id provided, using default: {photo_id}")
             
             # Create a temporary file to store the image
             temp_file = tempfile.NamedTemporaryFile(delete=False)
@@ -243,6 +289,13 @@ def match_hash():
                 # Save the image to the temporary file
                 image_file.save(image_path)
                 logger.info(f"Saved uploaded image to {image_path}")
+                
+                # Read the image data for potential Altitude submission
+                with open(image_path, 'rb') as img_file:
+                    image_data = img_file.read()
+                    # Encode image for Altitude API (base64)
+                    image_data_b64 = base64.b64encode(image_data).decode('utf-8')
+                    logger.info(f"Read image data: {len(image_data)} bytes, base64 length: {len(image_data_b64)}")
                 
                 # Get the content type
                 content_type = image_file.content_type or 'application/octet-stream'
@@ -288,10 +341,12 @@ def match_hash():
             }
             
             # Extract matches from the HMA response
+            found_matches = False
             if 'pdq' in result:
                 pdq_matches = result['pdq']
                 for bank_name, bank_matches in pdq_matches.items():
                     for match in bank_matches:
+                        found_matches = True
                         formatted_result["matches"].append({
                             "bank": bank_name,
                             "content_id": match.get("content_id"),
@@ -299,6 +354,94 @@ def match_hash():
                             "hash": match.get("hash", ""),
                             "metadata": match.get("metadata", {})
                         })
+            
+            # Log the moderation event
+            if photo_id and author_did:
+                log_moderation_event(
+                    photo_id=photo_id,
+                    author_did=author_did,
+                    match_result=found_matches,
+                    match_type="pdq",
+                    match_score=formatted_result["matches"][0].get("distance") if found_matches and formatted_result["matches"] else None,
+                    action_taken=None,
+                    hma_response=json.dumps(result)
+                )
+                logger.info(f"Logged moderation event for photo {photo_id}")
+                
+                # Always create a review task in Altitude, regardless of matches
+                # This ensures we have visual content in Altitude for every upload
+                if image_data_b64:
+                    try:
+                        logger.info(f"Creating Altitude review task for photo {photo_id}, author {author_did}, with {len(formatted_result['matches'])} matches")
+                        # Create review task in Altitude
+                        match_info = formatted_result["matches"][0] if formatted_result["matches"] else {"hash": ""}
+                        altitude_task = altitude_client.create_review_task(
+                            image_data_b64,
+                            photo_id,
+                            author_did,
+                            match_info
+                        )
+                        
+                        if altitude_task:
+                            # Update the log entry with Altitude task information
+                            log_moderation_event(
+                                photo_id=photo_id,
+                                author_did=author_did,
+                                match_result=found_matches,
+                                match_type="pdq",
+                                match_score=formatted_result["matches"][0].get("distance") if formatted_result["matches"] else None,
+                                action_taken=None,
+                                hma_response=json.dumps(result),
+                                altitude_task_id=altitude_task.get("id"),
+                                altitude_task_status="pending_review"
+                            )
+                            
+                            logger.info(f"Created Altitude review task for photo {photo_id} with task ID: {altitude_task.get('id')}")
+                            formatted_result["altitude"] = {
+                                "task_created": True,
+                                "task_id": altitude_task.get("id")
+                            }
+                        else:
+                            logger.error(f"Failed to create Altitude review task for photo {photo_id}")
+                            # Log without Altitude task information
+                            log_moderation_event(
+                                photo_id=photo_id,
+                                author_did=author_did,
+                                match_result=found_matches,
+                                match_type="pdq",
+                                match_score=formatted_result["matches"][0].get("distance") if formatted_result["matches"] else None,
+                                action_taken=None,
+                                hma_response=json.dumps(result)
+                            )
+                            
+                            logger.error(f"Failed to create Altitude review task for photo {photo_id}")
+                            formatted_result["altitude"] = {
+                                "task_created": False,
+                                "error": "Failed to create review task"
+                            }
+                    except Exception as e:
+                        # Log without Altitude task information
+                        log_moderation_event(
+                            photo_id=photo_id,
+                            author_did=author_did,
+                            match_result=found_matches,
+                            match_type="pdq",
+                            match_score=formatted_result["matches"][0].get("distance") if formatted_result["matches"] else None,
+                            action_taken=None,
+                            hma_response=json.dumps(result)
+                        )
+                        
+                        logger.error(f"Error creating Altitude review task: {str(e)}")
+                        formatted_result["altitude"] = {
+                            "task_created": False,
+                            "error": str(e)
+                        }
+                else:
+                    logger.error(f"No image data available to create Altitude task for photo {photo_id}")
+                    formatted_result["altitude"] = {
+                        "task_created": False,
+                        "error": "No image data available"
+                    }
             
             logger.info(f"Formatted match result: {formatted_result}")
             return jsonify(formatted_result)
@@ -368,7 +511,12 @@ def get_logs():
                     "match_type": log.match_type,
                     "match_score": log.match_score,
                     "action_taken": log.action_taken,
-                    "created_at": log.created_at.isoformat()
+                    "created_at": log.created_at.isoformat(),
+                    "altitude": {
+                        "task_id": log.altitude_task_id,
+                        "task_status": log.altitude_task_status,
+                        "created_at": log.altitude_task_created_at.isoformat() if log.altitude_task_created_at else None
+                    } if log.altitude_task_id else None
                 } for log in logs
             ],
             "count": len(logs),
@@ -396,7 +544,12 @@ def get_logs_for_photo(photo_id):
                     "match_type": log.match_type,
                     "match_score": log.match_score,
                     "action_taken": log.action_taken,
-                    "created_at": log.created_at.isoformat()
+                    "created_at": log.created_at.isoformat(),
+                    "altitude": {
+                        "task_id": log.altitude_task_id,
+                        "task_status": log.altitude_task_status,
+                        "created_at": log.altitude_task_created_at.isoformat() if log.altitude_task_created_at else None
+                    } if log.altitude_task_id else None
                 } for log in logs
             ],
             "count": len(logs)
@@ -573,6 +726,125 @@ def admin_bank_add_content(bank_name):
             "success": False,
             "error": str(e)
         }), 500
+
+@app.route("/api/v1/altitude/task/<task_id>", methods=["GET"])
+def get_altitude_task(task_id):
+    """
+    Get the status of an Altitude review task.
+    
+    Args:
+        task_id: The Altitude task ID
+    """
+    try:
+        logger.info(f"Getting status of Altitude task {task_id}")
+        
+        # Get task status from Altitude
+        task_status = altitude_client.get_task_status(task_id)
+        
+        if task_status:
+            return jsonify({
+                "success": True,
+                "task": task_status
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": f"Failed to get status for task {task_id}"
+            }), 404
+    except Exception as e:
+        logger.error(f"Error getting Altitude task status: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route("/api/v1/altitude/health", methods=["GET"])
+def check_altitude_health():
+    """
+    Check the health of the Altitude service.
+    """
+    try:
+        health_status = altitude_client.check_health()
+        
+        return jsonify({
+            "success": True,
+            "healthy": health_status
+        })
+    except Exception as e:
+        logger.error(f"Error checking Altitude health: {e}")
+        return jsonify({
+            "success": False,
+            "healthy": False,
+            "error": str(e)
+        }), 500
+
+@app.route("/api/v1/altitude/webhook", methods=["POST"])
+def altitude_webhook():
+    """
+    Receive callbacks from Altitude service.
+    
+    This endpoint processes verdicts and status updates for content reviewed in Altitude.
+    """
+    try:
+        # Process webhook data
+        data = request.json
+        logger.info(f"Received Altitude webhook: {data}")
+        
+        # Expected format:
+        # {
+        #     "client_context": "...", (JSON string containing photo_id and author_did)
+        #     "decision": "APPROVE" or "BLOCK",
+        #     "decision_time": "2023-01-01T00:00:00Z"
+        # }
+        
+        if not data or 'client_context' not in data or 'decision' not in data:
+            logger.error("Invalid Altitude webhook data: missing required fields")
+            return jsonify({"error": "Invalid webhook data"}), 400
+        
+        # Parse client_context to get photo_id and author_did
+        try:
+            client_context = json.loads(data['client_context'])
+            photo_id = client_context.get('photo_id')
+            author_did = client_context.get('author_did')
+            
+            if not photo_id or not author_did:
+                logger.error("Invalid client_context: missing photo_id or author_did")
+                return jsonify({"error": "Invalid client_context"}), 400
+                
+            # Update the moderation log with the Altitude decision
+            action_taken = "approve" if data['decision'] == "APPROVE" else "block"
+            
+            # Get the moderation logs for this photo
+            logs = get_moderation_logs_for_photo(photo_id)
+            
+            if logs:
+                # Update the latest log entry
+                log = logs[0]
+                
+                # Update Altitude task information
+                success = update_altitude_task(
+                    photo_id=photo_id,
+                    altitude_task_id=log.altitude_task_id,
+                    altitude_task_status=action_taken
+                )
+                
+                if success:
+                    logger.info(f"Updated moderation log for photo {photo_id} with Altitude decision: {action_taken}")
+                    return jsonify({"status": "success"}), 200
+                else:
+                    logger.error(f"Failed to update moderation log for photo {photo_id}")
+                    return jsonify({"error": "Failed to update moderation log"}), 500
+            else:
+                logger.error(f"No moderation logs found for photo {photo_id}")
+                return jsonify({"error": "No moderation logs found"}), 404
+                
+        except json.JSONDecodeError:
+            logger.error(f"Invalid client_context JSON: {data.get('client_context')}")
+            return jsonify({"error": "Invalid client_context JSON"}), 400
+            
+    except Exception as e:
+        logger.error(f"Error processing Altitude webhook: {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     # Run the app in development mode

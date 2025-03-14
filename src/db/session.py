@@ -100,4 +100,47 @@ def get_moderation_logs_for_photo(photo_id):
             ModerationLog.photo_id == photo_id
         ).order_by(ModerationLog.created_at.desc()).all()
     finally:
+        db.close()
+
+def update_altitude_task(photo_id, task_id):
+    """
+    Update a moderation log with an Altitude task ID.
+    
+    Args:
+        photo_id: The ID of the photo
+        task_id: The Altitude task ID
+        
+    Returns:
+        The updated ModerationLog instance or None if not found
+    """
+    db = get_db()
+    try:
+        log = db.query(ModerationLog).filter(
+            ModerationLog.photo_id == photo_id
+        ).order_by(ModerationLog.created_at.desc()).first()
+        
+        if log:
+            log.altitude_task_id = task_id
+            db.commit()
+            db.refresh(log)
+        return log
+    finally:
+        db.close()
+
+def get_moderation_logs_by_altitude_task(task_id):
+    """
+    Get all moderation logs for a specific Altitude task.
+    
+    Args:
+        task_id: The Altitude task ID
+        
+    Returns:
+        List of ModerationLog instances for the task
+    """
+    db = get_db()
+    try:
+        return db.query(ModerationLog).filter(
+            ModerationLog.altitude_task_id == task_id
+        ).order_by(ModerationLog.created_at.desc()).all()
+    finally:
         db.close() 
