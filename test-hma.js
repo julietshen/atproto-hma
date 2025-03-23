@@ -14,7 +14,7 @@ import FormData from 'form-data';
 // Configuration values - hardcoded for reliable testing
 const HMA_SERVICE_URL = 'http://localhost:5000';
 const BRIDGE_API_URL = 'http://localhost:3001';
-const API_KEY = 'dev_key';
+const API_KEY = process.env.HMA_API_KEY || 'dev_key';
 
 // Debug mode - set to true for more detailed logging
 const DEBUG = true;

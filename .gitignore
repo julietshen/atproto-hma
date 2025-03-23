@@ -138,4 +138,32 @@ altitude-frontend/
 logs/
 npm-debug.log*
 yarn-debug.log*
-yarn-error.log* 
+yarn-error.log*
+
+# Sensitive files
+*.pem
+*.key
+*.crt
+*.csr
+*.srl
+*ssh*key*
+*authorized_keys*
+*known_hosts*
+*id_rsa*
+*id_ed25519*
+*id_ecdsa*
+
+# API keys and secrets
+token
+tokens
+secret
+secrets
+password
+passwords
+api_key
+apikey
+api_keys
+apikeys
+credentials
+*.credentials
+*.creds 
